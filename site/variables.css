@@ -1,10 +1,10 @@
 :root {
   --font-family: 'Open Sans', sans-serif;
 
-  --color-primary:  #373232;
+  --color-primary:  #000;
   --color-secondary: #FF6808;
   --color-secondary-dark: #FF6808;
-  --color-text: #373232;
+  --color-text: #000;
 
   --background: #ffffff;
   --home-background: #ffffff;
