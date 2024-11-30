@@ -1,3 +1,5 @@
+![site/logo.svg](site/logo.svg)
+
 # qified
 Task and Message Queues with Multiple Providers
 
