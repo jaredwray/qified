@@ -18,8 +18,8 @@
   "scripts": {
     "test": "xo --fix && vitest run --coverage",
     "test:ci": "xo && vitest run --coverage",
-    "test:services:start": "docker-compose up -d",
-    "test:services:stop": "docker-compose down",
+    "test:services:start": "docker compose up -d",
+    "test:services:stop": "docker compose down",
     "clean": "rimraf ./dist ./coverage ./site/dist",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
     "website:build": "docula build",
