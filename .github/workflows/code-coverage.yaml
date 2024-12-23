@@ -29,6 +29,9 @@ jobs:
     - name: Build    
       run: pnpm build
 
+    - name: Test Services
+      run: pnpm test:services:start
+
     - name: Testing    
       run: pnpm test
       
