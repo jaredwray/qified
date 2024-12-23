@@ -1,0 +1,16 @@
+services:
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # RabbitMQ port
+      - "15672:15672" # RabbitMQ Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379" # Redis port
