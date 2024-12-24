@@ -1,0 +1,55 @@
+{
+  "name": "qified",
+  "version": "0.1.1",
+  "description": "Task and Message Queues with Multiple Providers",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"require": "./dist/index.cjs",
+			"import": "./dist/index.js"
+		}
+	},
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "xo --fix && vitest run --coverage",
+    "test:ci": "xo && vitest run --coverage",
+    "clean": "rimraf ./dist ./coverage ./site/dist",
+    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "queue",
+    "task",
+    "message",
+    "provider",
+    "qified"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaredwray/qified.git"
+  },
+  "author": "Jared Wray <me@jaredwray.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jaredwray/qified/issues"
+  },
+  "homepage": "https://github.com/jaredwray/qified#readme",
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
+    "docula": "^0.9.6",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "xo": "^0.60.0"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ]
+}

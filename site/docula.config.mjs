@@ -11,7 +11,7 @@ export const options = {
 };
 
 export const onPrepare = async config => {
-	const readmePath = path.join(process.cwd(), './README.md');
+	const readmePath = path.join(process.cwd(), './packages/qified/README.md');
 	const readmeSitePath = path.join(config.sitePath, 'README.md');
 	const readme = await fs.promises.readFile(readmePath, 'utf8');
 	const updatedReadme = readme.replace('[![site/logo.svg](site/logo.svg)](https://qified.org)', '');

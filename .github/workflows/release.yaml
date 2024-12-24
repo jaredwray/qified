@@ -31,7 +31,7 @@ jobs:
       run: pnpm test:services:start
 
     - name: Testing    
-      run: pnpm test
+      run: pnpm test:ci
 
     - name: Publish
       run: |
