@@ -1,59 +1,24 @@
 {
-  "name": "qified",
-  "version": "0.1.1",
-  "description": "Task and Message Queues with Multiple Providers",
-	"type": "module",
-	"main": "./dist/index.cjs",
-	"module": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"require": "./dist/index.cjs",
-			"import": "./dist/index.js"
-		}
-	},
-  "engines": {
-    "node": ">=20"
-  },
+  "name": "qified-mono-repo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Qified Mono Repo",
   "scripts": {
-    "test": "xo --fix && vitest run --coverage",
-    "test:ci": "xo && vitest run --coverage",
+    "test": "pnpm -r test",
+    "test:ci": "c8 --reporter=lcov pnpm -r test:ci",
     "test:services:start": "docker compose up -d",
     "test:services:stop": "docker compose down",
-    "clean": "rimraf ./dist ./coverage ./site/dist",
-    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
-    "website:build": "docula build",
-    "website:serve": "docula serve",
-    "prepare": "npm run build"
+    "website:build": "npx docula build",
+    "website:serve": "npx docula serve",
+    "build": "pnpm recursive run build",
+    "clean": "pnpm recursive run clean"
   },
-  "keywords": [
-    "queue",
-    "task",
-    "message",
-    "provider",
-    "qified"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jaredwray/qified.git"
-  },
+  "keywords": [],
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/jaredwray/qified/issues"
-  },
-  "homepage": "https://github.com/jaredwray/qified#readme",
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.8",
+    "c8": "^10.1.3",
     "docula": "^0.9.6",
-    "rimraf": "^6.0.1",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8",
-    "xo": "^0.60.0"
-  },
-  "files": [
-    "dist",
-    "LICENSE"
-  ]
+    "vitest": "^2.1.8"
+  }
 }
