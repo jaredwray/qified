@@ -10,14 +10,14 @@ export interface MessageProvider {
 	initialize(config: Record<string, any>): Promise<void>;
 
 	// List of message subscribers
-	messageSubscribers: Array<{ topic: string; handler: (message: Message) => Promise<void> }>;
+	subscribers: Array<{ topic: string; handler: (message: Message) => Promise<void> }>;
 
 	// Publish a message to a given topic or queue
-	publishMessage(topic: string, message: Message): Promise<void>;
+	publish(topic: string, message: Message): Promise<void>;
 
 	// Subscribe to a topic or queue and handle incoming messages
-	subscribeMessages(topic: string, handler: (message: Message) => Promise<void>): Promise<void>;
+	subscribe(topic: string, handler: (message: Message) => Promise<void>): Promise<void>;
 
 	// Gracefully shutdown the provider
-	shutdown(): Promise<void>;
+	disconnect(): Promise<void>;
 }
