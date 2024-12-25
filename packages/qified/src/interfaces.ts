@@ -40,7 +40,7 @@ export type TaskProvider = {
 	// Enqueue a task to be processed
 	enqueueTask(taskName: string, payload: Task): Promise<void>;
 
-	addTaskHandler(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
+	registerTaskHandler(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
 
 	// Gracefully shutdown the provider
 	disconnect(): Promise<void>;
