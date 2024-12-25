@@ -49,7 +49,9 @@ export type MessageProvider = {
 };
 
 export type Task = {
+	id: string; // Unique identifier for the task
 	data: any; // The data required to process the task
+	channel: string; // The channel that the task belongs to
 	priority?: number; // Optional priority level of the task
 	retries?: number; // Optional number of retries for the task
 };
@@ -61,7 +63,7 @@ export type TaskProvider = {
 	taskHandlers: Array<{taskName: string; handler: (payload: Task) => Promise<void>}>;
 
 	// Initialize the provider
-	initialize(config: Record<string, any>): Promise<void>;
+	init(config: Record<string, any>): Promise<void>;
 
 	// Enqueue a task to be processed
 	enqueueTask(taskName: string, payload: Task): Promise<void>;
