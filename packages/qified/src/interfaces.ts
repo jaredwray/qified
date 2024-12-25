@@ -1,8 +1,34 @@
-export type Message = {
-	id: string; // Unique identifier for the message
-	data: any; // The payload of the message
-	timestamp?: number; // Optional timestamp of when the message was created
-	headers?: Record<string, string>; // Optional headers for additional metadata
+
+/**
+ * Message interface
+ */
+export type Message <T = any> = {
+	/**
+	 * Unique identifier for the message
+	 * @type {string}
+	 */
+	id: string;
+	/**
+	 * The channel that the message belongs to. This is used to route the message to the correct 
+	 * handler and is the same as the topic or queue in a pub/sub system.
+	 * @type {string}
+	 */
+	channel: string;
+	/**
+	 * The data of the message
+	 * @type {<T = any>}
+	 */
+	data: T;
+	/**
+	 * Timestamp of when the message was created
+	 * @type {number}
+	 */
+	timestamp?: number;
+	/**
+	 * Headers for additional metadata
+	 * @type {Record<string, string>}
+	 */
+	headers?: Record<string, string>;
 };
 
 export type MessageProvider = {
