@@ -66,9 +66,9 @@ export type TaskProvider = {
 	init(config: Record<string, any>): Promise<void>;
 
 	// Enqueue a task to be processed
-	enqueueTask(taskName: string, payload: Task): Promise<void>;
+	enqueue(taskName: string, payload: Task): Promise<void>;
 
-	registerTaskHandler(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
+	dequeue(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
 
 	// Gracefully shutdown the provider
 	disconnect(): Promise<void>;
