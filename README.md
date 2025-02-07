@@ -9,15 +9,24 @@
 # qified
 Task and Message Queues with Multiple Providers
 
-## NOTE: This is a work in progress and not ready for production use. Please wait till v1.0.0 is released.
+> NOTE: This is a work in progress and not ready for production use. Please wait till v1.0.0 is released.
+
+This is a mono repo that contains the following packages:
+* [qified](packages/qified/README.md) - The main package that contains the core functionality
+
+There will be more packages added in the future such as:
+* [@qified/redis](packages/qified-redis/README.md) - Redis Provider
+* [@qified/rabbitmq](packages/qified-rabbitmq/README.md) - RabbitMQ Provider
+* [@qified/memory](packages/qified-memory/README.md) - In Memory Provider
 
 # Development and Testing
 
 Qified is written in TypeScript and tests are written in `vitest`. To run the tests, use the following command:
 
-1. `npm install` - This will install all the dependencies
-2. `npm test:services:start` - This will start the services needed for testing (Redis, RabbitMQ, etc)
-3. `npm test` - This will run the tests
+1. `nvm use` - This will use the correct node version
+2. `pnpm install` - This will install all the dependencies
+3. `pnpm test:services:start` - This will start the services needed for testing (Redis, RabbitMQ, etc)
+4. `pnpm test` - This will run the tests
 
 To contribute follow the [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
