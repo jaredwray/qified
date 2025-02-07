@@ -32,9 +32,9 @@ Task and Message Queues with Multiple Providers
 
 Qified is written in TypeScript and tests are written in `vitest`. To run the tests, use the following command:
 
-1. `npm install` - This will install all the dependencies
-2. `npm test:services:start` - This will start the services needed for testing (Redis, RabbitMQ, etc)
-3. `npm test` - This will run the tests
+1. `pnpm install` - This will install all the dependencies
+2. `pnpm test:services:start` - This will start the services needed for testing (Redis, RabbitMQ, etc)
+3. `pnpm test` - This will run the tests
 
 To contribute follow the [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
