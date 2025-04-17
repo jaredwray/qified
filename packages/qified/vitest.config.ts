@@ -5,10 +5,10 @@ export default defineConfig({
 		include: ['test/*.ts'],
 		coverage: {
 			exclude: [
-				'site/**',
 				'vitest.config.ts',
 				'dist/**',
 				'test/**',
+				'src/types.ts',
 			],
 		},
 	},
