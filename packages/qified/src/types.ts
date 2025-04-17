@@ -1,6 +1,7 @@
 
 /**
- * Message type / interface
+ * Message interface for the message provider
+ * @template T - The type of the message data
  */
 export type Message <T = any> = {
 	/**
@@ -31,45 +32,113 @@ export type Message <T = any> = {
 	headers?: Record<string, string>;
 };
 
+/**
+ * MessageProvider interface for the message provider
+ */
 export type MessageProvider = {
-	// List of message subscribers
+	/**
+	 * Array of handlers for message processing
+	 * @type {Array<{topic: string; handler: (message: Message) => Promise<void>}>}
+	 */
 	subscribers: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
 
-	// Initialize the provider
+	/**
+	 * Initialization and connects to the provider and passed the configuration object.
+	 * @param config - Configuration object for the provider
+	 */
 	init(config: Record<string, any>): Promise<void>;
 
-	// Publish a message to a given topic or queue
+	/**
+	 * Plublish a message to a topic / queue. This is used to send messages to subscribers.
+	 * @param topic - The topic or queue to publish the message to
+	 * @param message - The message to be published
+	 * @returns {Promise<void>}
+	 */
 	publish(topic: string, message: Message): Promise<void>;
 
-	// Subscribe to a topic or queue and handle incoming messages
+	/**
+	 * Subscribe to a topic / queue. This is used to receive messages from the provider.
+	 * @param topic - The topic or queue to subscribe to
+	 * @param handler - The handler function to process the message
+	 * @returns {Promise<void>}
+	 */
 	subscribe(topic: string, handler: (message: Message) => Promise<void>): Promise<void>;
 
-	// Gracefully shutdown the provider
+	/**
+	 * Unsubscribe from a topic / queue. This is used to stop receiving messages from the provider.
+	 * @returns {Promise<void>}
+	 */
 	disconnect(): Promise<void>;
 };
 
-export type Task = {
-	id: string; // Unique identifier for the task
-	data: any; // The data required to process the task
-	channel: string; // The channel that the task belongs to
-	priority?: number; // Optional priority level of the task
-	retries?: number; // Optional number of retries for the task
+/**
+ * Task interface for the task provider
+ * @template T - The type of the task data
+ */
+export type Task <T = any> = {
+	/**
+	 * Unique identifier for the task
+	 * @type {string}
+	 */
+	id: string;
+	/**
+	 * The data of the task
+	 * @type {<T = any>}
+	 */
+	data: T;
+	/**
+	 * Timestamp of when the task was created
+	 * @type {number}
+	 */
+	channel: string;
+	/**
+	 * Timestamp of when the task was created
+	 * @type {number}
+	 */
+	priority?: number;
+	/**
+	 * Timestamp of when the task was created
+	 * @type {number}
+	 */
+	retries?: number;
 };
 
+/**
+ * TaskProvider interface for the task provider
+ */
 export type TaskProvider = {
 	/**
 	 * Array of handlers for task processing
+	 * @type {Array<{taskName: string; handler: (payload: Task) => Promise<void>}>}
 	 */
 	taskHandlers: Array<{taskName: string; handler: (payload: Task) => Promise<void>}>;
 
-	// Initialize the provider
+	/**
+	 * Array of handlers for task processing
+	 * @param config - Configuration object for the provider
+	 * @returns {Promise<void>}
+	 */
 	init(config: Record<string, any>): Promise<void>;
 
-	// Enqueue a task to be processed
+	/**
+	 * Publish a task to a queue. This is used to send tasks to subscribers.
+	 * @param taskName - The name of the task to publish
+	 * @param payload - The task to be published
+	 * @returns {Promise<void>}
+	 */
 	enqueue(taskName: string, payload: Task): Promise<void>;
 
+	/**
+	 * Subscribe to a task. This is used to receive tasks from the provider.
+	 * @param taskName - The name of the task to subscribe to
+	 * @param handler - The handler function to process the task
+	 * @returns {Promise<void>}
+	 */
 	dequeue(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
 
-	// Gracefully shutdown the provider
+	/**
+	 * Disconnect and clean up the provider. This is used to stop receiving tasks from the provider.
+	 * @returns {Promise<void>}
+	 */
 	disconnect(): Promise<void>;
 };
