@@ -40,7 +40,7 @@ export type MessageProvider = {
 	 * Array of handlers for message processing
 	 * @type {Array<{topic: string; handler: (message: Message) => Promise<void>}>}
 	 */
-	subscribers: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
+	subscriptions: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
 
 	/**
 	 * Initialization and connects to the provider and passed the configuration object.
@@ -63,6 +63,13 @@ export type MessageProvider = {
 	 * @returns {Promise<void>}
 	 */
 	subscribe(topic: string, handler: (message: Message) => Promise<void>): Promise<void>;
+
+	/**
+	 * Remove subscription to a topic / queue.
+	 * @param topic - The topic or queue to subscribe to
+	 * @returns {Promise<void>}
+	 */
+	unsubscribe(topic: string): Promise<void>;
 
 	/**
 	 * Unsubscribe from a topic / queue. This is used to stop receiving messages from the provider.
