@@ -8,6 +8,18 @@ describe('MemoryMessageProvider', () => {
 		expect(provider.subscriptions).toEqual([]);
 	});
 
+	test('should be able to set subscriptions', () => {
+		const provider = new MemoryMessageProvider();
+		const subscriptions = [
+			// eslint-disable-next-line @typescript-eslint/no-empty-function
+			{topic: 'test/topic1', async handler(message: any) {}},
+			// eslint-disable-next-line @typescript-eslint/no-empty-function
+			{topic: 'test/topic2', async handler(message: any) {}},
+		];
+		provider.subscriptions = subscriptions;
+		expect(provider.subscriptions).toEqual(subscriptions);
+	});
+
 	test('should add a subscription', async () => {
 		const provider = new MemoryMessageProvider();
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -15,6 +27,16 @@ describe('MemoryMessageProvider', () => {
 		await provider.subscribe('test/topic', handler);
 		expect(provider.subscriptions.length).toBe(1);
 		expect(provider.subscriptions[0].topic).toBe('test/topic');
+	});
+
+	test('should remove a subscription', async () => {
+		const provider = new MemoryMessageProvider();
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		const handler = async (message: any) => {};
+		await provider.subscribe('test/topic', handler);
+		expect(provider.subscriptions.length).toBe(1);
+		await provider.unsubscribe('test/topic');
+		expect(provider.subscriptions.length).toBe(0);
 	});
 
 	test('should publish a message to the correct topic', async () => {
@@ -27,5 +49,15 @@ describe('MemoryMessageProvider', () => {
 		await provider.subscribe('test/topic', handler);
 
 		await provider.publish('test/topic', message);
+	});
+
+	test('should disconnect and clear subscriptions', async () => {
+		const provider = new MemoryMessageProvider();
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		const handler = async (message: any) => {};
+		await provider.subscribe('test/topic', handler);
+		expect(provider.subscriptions.length).toBe(1);
+		await provider.disconnect();
+		expect(provider.subscriptions.length).toBe(0);
 	});
 });
