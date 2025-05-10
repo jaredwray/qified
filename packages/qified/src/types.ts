@@ -46,7 +46,7 @@ export type MessageProvider = {
 	 * Initialization and connects to the provider and passed the configuration object.
 	 * @param config - Configuration object for the provider
 	 */
-	init(config: Record<string, any>): Promise<void>;
+	init(config?: Record<string, any>): Promise<void>;
 
 	/**
 	 * Plublish a message to a topic / queue. This is used to send messages to subscribers.
