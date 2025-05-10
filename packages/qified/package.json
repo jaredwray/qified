@@ -1,6 +1,6 @@
 {
   "name": "qified",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Task and Message Queues with Multiple Providers",
 	"type": "module",
 	"main": "./dist/index.cjs",
