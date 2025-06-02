@@ -3,7 +3,7 @@
  * Message interface for the message provider
  * @template T - The type of the message data
  */
-export type Message <T = any> = {
+export type Message<T = any> = {
 	/**
 	 * Unique identifier for the message
 	 * @type {string}
@@ -82,7 +82,7 @@ export type MessageProvider = {
  * Task interface for the task provider
  * @template T - The type of the task data
  */
-export type Task <T = any> = {
+export type Task<T = any> = {
 	/**
 	 * Unique identifier for the task
 	 * @type {string}
