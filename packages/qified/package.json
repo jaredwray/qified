@@ -1,6 +1,6 @@
 {
   "name": "qified",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Task and Message Queues with Multiple Providers",
 	"type": "module",
 	"main": "./dist/index.cjs",
@@ -20,7 +20,7 @@
     "test:ci": "xo && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage ./site/dist",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
-    "prepare": "npm run build"
+    "prepare": "pnpm build"
   },
   "keywords": [
     "queue",
