@@ -1,3 +1,4 @@
+
 import {describe, test, expect} from 'vitest';
 import {Qified} from '../src/index.js';
 
