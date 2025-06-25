@@ -1,6 +1,6 @@
 
 import {describe, expect, test} from 'vitest';
-import {MemoryMessageProvider} from '../src/memory.js';
+import {MemoryMessageProvider} from '../src/memory/message.js';
 import type {Message} from '../src/types.js';
 
 describe('MemoryMessageProvider', () => {

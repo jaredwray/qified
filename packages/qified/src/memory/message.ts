@@ -1,4 +1,4 @@
-import type {Message, MessageProvider} from './types.js';
+import type {Message, MessageProvider} from '../types.js';
 
 export class MemoryMessageProvider implements MessageProvider {
 	private _subscriptions: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
