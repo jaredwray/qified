@@ -18,7 +18,7 @@
   "license": "MIT",
   "devDependencies": {
     "@vitest/coverage-v8": "^3.1.4",
-    "docula": "^0.12.2",
+    "docula": "^0.13.0",
     "vitest": "^3.1.4"
   }
 }
