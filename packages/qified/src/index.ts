@@ -13,12 +13,12 @@ export type QifiedOptions = {
 	/**
 	 * The message providers to use.
 	 */
-	messageProviders: MessageProvider[];
+	messageProviders?: MessageProvider[];
 
 	/**
 	 * The task providers to use.
 	 */
-	taskProviders: TaskProvider[];
+	taskProviders?: TaskProvider[];
 };
 
 export class Qified {

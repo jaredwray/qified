@@ -1,4 +1,4 @@
-[![site/logo.svg](site/logo.svg)](https://qified.org)
+[![logo.svg](https://qified.org/logo.svg)](https://qified.org)
 
 [![tests](https://github.com/jaredwray/qified/actions/workflows/tests.yaml/badge.svg)](https://github.com/jaredwray/qified/actions/workflows/tests.yaml)
 [![GitHub license](https://img.shields.io/github/license/jaredwray/qified)](https://github.com/jaredwray/qified/blob/master/LICENSE)
