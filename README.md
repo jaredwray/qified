@@ -12,12 +12,11 @@ Task and Message Queues with Multiple Providers
 > NOTE: This is a work in progress and not ready for production use. Please wait till v1.0.0 is released.
 
 This is a mono repo that contains the following packages:
-* [qified](packages/qified/README.md) - The main package that contains the core functionality
+* [qified](packages/qified/README.md) - The main package that contains the core functionality and a built in in-memory provider.
 
 There will be more packages added in the future such as:
-* [@qified/redis](packages/qified-redis/README.md) - Redis Provider
-* [@qified/rabbitmq](packages/qified-rabbitmq/README.md) - RabbitMQ Provider
-* [@qified/memory](packages/qified-memory/README.md) - In Memory Provider
+* [@qified/redis](packages/redis/README.md) - Redis Provider
+* [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
 
 # Development and Testing
 
