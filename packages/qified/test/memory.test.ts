@@ -1,6 +1,6 @@
 
 import {describe, expect, test} from 'vitest';
-import {MemoryMessageProvider} from '../src/memory.js';
+import {MemoryMessageProvider} from '../src/memory/message.js';
 import type {Message} from '../src/types.js';
 
 describe('MemoryMessageProvider', () => {
@@ -43,13 +43,17 @@ describe('MemoryMessageProvider', () => {
 	test('should publish a message to the correct topic', async () => {
 		const provider = new MemoryMessageProvider();
 		const message: Message = {id: 'foo', channel: 'test/topic', data: {test: 'message'}};
+		let handlerMessage = '';
 		const handler = async (message: any) => {
 			expect(message).toEqual(message);
+			handlerMessage = message as string;
 		};
 
 		await provider.subscribe('test/topic', handler);
 
 		await provider.publish('test/topic', message);
+
+		expect(handlerMessage).toEqual(message);
 	});
 
 	test('should disconnect and clear subscriptions', async () => {
