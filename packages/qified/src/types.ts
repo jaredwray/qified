@@ -32,15 +32,17 @@ export type Message<T = any> = {
 	headers?: Record<string, string>;
 };
 
+export type TopicHandler = {topic: string; handler: (message: Message) => Promise<void>};
+
 /**
  * MessageProvider interface for the message provider
  */
 export type MessageProvider = {
 	/**
 	 * Array of handlers for message processing
-	 * @type {Array<{topic: string; handler: (message: Message) => Promise<void>}>}
+	 * @type {Array<TopicHandler>}
 	 */
-	subscriptions: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
+	subscriptions: TopicHandler[];
 
 	/**
 	 * Initialization and connects to the provider and passed the configuration object.
