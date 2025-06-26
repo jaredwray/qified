@@ -1,17 +1,17 @@
-import type {Message, MessageProvider} from '../types.js';
+import type {Message, MessageProvider, TopicHandler} from '../types.js';
 
 export class MemoryMessageProvider implements MessageProvider {
-	private _subscriptions: Array<{topic: string; handler: (message: Message) => Promise<void>}>;
+	private _subscriptions: TopicHandler[];
 
 	constructor() {
 		this._subscriptions = [];
 	}
 
-	public get subscriptions(): Array<{topic: string; handler: (message: Message) => Promise<void>}> {
+	public get subscriptions(): TopicHandler[] {
 		return this._subscriptions;
 	}
 
-	public set subscriptions(value: Array<{topic: string; handler: (message: Message) => Promise<void>}>) {
+	public set subscriptions(value: TopicHandler[]) {
 		this._subscriptions = value;
 	}
 
@@ -26,8 +26,8 @@ export class MemoryMessageProvider implements MessageProvider {
 		}
 	}
 
-	public async subscribe(topic: string, handler: (message: Message) => Promise<void>): Promise<void> {
-		this._subscriptions.push({topic, handler});
+	public async subscribe(subscription: TopicHandler): Promise<void> {
+		this._subscriptions.push(subscription);
 	}
 
 	public async unsubscribe(topic: string): Promise<void> {
