@@ -32,7 +32,7 @@ export type Message<T = any> = {
 	headers?: Record<string, string>;
 };
 
-export type TopicHandler = {topic: string; handler: (message: Message) => Promise<void>};
+export type TopicHandler = {id?: string; handler: (message: Message) => Promise<void>};
 
 /**
  * MessageProvider interface for the message provider
@@ -40,9 +40,9 @@ export type TopicHandler = {topic: string; handler: (message: Message) => Promis
 export type MessageProvider = {
 	/**
 	 * Array of handlers for message processing
-	 * @type {Array<TopicHandler>}
+	 * @type {Map<string, Array<TopicHandler>>}
 	 */
-	subscriptions: TopicHandler[];
+	subscriptions: Map<string, TopicHandler[]>;
 
 	/**
 	 * Initialization and connects to the provider and passed the configuration object.
@@ -63,14 +63,15 @@ export type MessageProvider = {
 	 * @param {TopicHandler} subscription - The topic or queue to subscribe to
 	 * @returns {Promise<void>}
 	 */
-	subscribe(subscription: TopicHandler): Promise<void>;
+	subscribe(topic: string, handler: TopicHandler): Promise<void>;
 
 	/**
 	 * Remove subscription to a topic / queue.
-	 * @param topic - The topic or queue to subscribe to
+	 * @param topic - The topic or queue to unsubscribe from
+	 * @param id - Optional unique identifier for the subscription to remove. If not provided, it will remove all subscriptions for the topic.
 	 * @returns {Promise<void>}
 	 */
-	unsubscribe(topic: string): Promise<void>;
+	unsubscribe(topic: string, id?: string): Promise<void>;
 
 	/**
 	 * Unsubscribe from a topic / queue. This is used to stop receiving messages from the provider.
