@@ -2,11 +2,6 @@ import {type MessageProvider, type TaskProvider} from './types.js';
 
 export type QifiedOptions = {
 	/**
-	 * The default channel to send messages to.
-	 */
-	defaultChannel: string;
-
-	/**
 	 * The message providers to use.
 	 */
 	messageProviders?: MessageProvider[];
@@ -18,16 +13,32 @@ export type QifiedOptions = {
 };
 
 export class Qified {
-	private _defaultChannel: string;
+	private _messageProviders: MessageProvider[] = [];
+	/**
+	 * Creates an instance of Qified.
+	 * @param {QifiedOptions} options - Optional configuration for Qified.
+	 */
 	constructor(options?: QifiedOptions) {
-		this._defaultChannel = options?.defaultChannel ?? 'default';
+		if (options?.messageProviders) {
+			this._messageProviders = options.messageProviders;
+		}
 	}
 
-	get defaultChannel() {
-		return this._defaultChannel;
+	/**
+	 * Gets or sets the message providers.
+	 * @returns {MessageProvider[]} The array of message providers.
+	 */
+	public get messageProviders(): MessageProvider[] {
+		return this._messageProviders;
 	}
 
-	set defaultChannel(channel: string) {
-		this._defaultChannel = channel;
+	/**
+	 * Sets the message providers.
+	 * @param {MessageProvider[]} providers - The array of message providers to set.
+	 */
+	public set messageProviders(providers: MessageProvider[]) {
+		this._messageProviders = providers;
 	}
 }
+
+export {MemoryMessageProvider} from './memory/message.js';

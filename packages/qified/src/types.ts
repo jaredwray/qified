@@ -45,6 +45,12 @@ export type MessageProvider = {
 	subscriptions: Map<string, TopicHandler[]>;
 
 	/**
+	 * Indicates whether the provider has been initialized
+	 * @type {boolean}
+	 */
+	initialized: boolean;
+
+	/**
 	 * Initialization and connects to the provider and passed the configuration object.
 	 * @param config - Configuration object for the provider
 	 */

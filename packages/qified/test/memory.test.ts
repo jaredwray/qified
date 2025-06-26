@@ -4,9 +4,14 @@ import {MemoryMessageProvider} from '../src/memory/message.js';
 import type {Message, TopicHandler} from '../src/types.js';
 
 describe('MemoryMessageProvider', () => {
-	test('should initialize with empty subscriptions', () => {
+	test('should initialize with empty subscriptions', async () => {
 		const provider = new MemoryMessageProvider();
 		expect(provider.subscriptions).toEqual(new Map());
+		expect(provider.initialized).toBe(false);
+		await provider.init();
+		expect(provider.initialized).toBe(true);
+		provider.initialized = false;
+		expect(provider.initialized).toBe(false);
 	});
 
 	test('should be able to set subscriptions', () => {
