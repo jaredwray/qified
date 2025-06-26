@@ -60,11 +60,10 @@ export type MessageProvider = {
 
 	/**
 	 * Subscribe to a topic / queue. This is used to receive messages from the provider.
-	 * @param topic - The topic or queue to subscribe to
-	 * @param handler - The handler function to process the message
+	 * @param {TopicHandler} subscription - The topic or queue to subscribe to
 	 * @returns {Promise<void>}
 	 */
-	subscribe(topic: string, handler: (message: Message) => Promise<void>): Promise<void>;
+	subscribe(subscription: TopicHandler): Promise<void>;
 
 	/**
 	 * Remove subscription to a topic / queue.

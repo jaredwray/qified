@@ -25,7 +25,7 @@ describe('MemoryMessageProvider', () => {
 		const provider = new MemoryMessageProvider();
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		const handler = async (message: any) => {};
-		await provider.subscribe('test/topic', handler);
+		await provider.subscribe({topic: 'test/topic', handler});
 		expect(provider.subscriptions.length).toBe(1);
 		expect(provider.subscriptions[0].topic).toBe('test/topic');
 	});
@@ -34,7 +34,7 @@ describe('MemoryMessageProvider', () => {
 		const provider = new MemoryMessageProvider();
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		const handler = async (message: any) => {};
-		await provider.subscribe('test/topic', handler);
+		await provider.subscribe({topic: 'test/topic', handler});
 		expect(provider.subscriptions.length).toBe(1);
 		await provider.unsubscribe('test/topic');
 		expect(provider.subscriptions.length).toBe(0);
@@ -49,7 +49,7 @@ describe('MemoryMessageProvider', () => {
 			handlerMessage = message as string;
 		};
 
-		await provider.subscribe('test/topic', handler);
+		await provider.subscribe({topic: 'test/topic', handler});
 
 		await provider.publish('test/topic', message);
 
@@ -60,7 +60,7 @@ describe('MemoryMessageProvider', () => {
 		const provider = new MemoryMessageProvider();
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		const handler = async (message: any) => {};
-		await provider.subscribe('test/topic', handler);
+		await provider.subscribe({topic: 'test/topic', handler});
 		expect(provider.subscriptions.length).toBe(1);
 		await provider.disconnect();
 		expect(provider.subscriptions.length).toBe(0);
