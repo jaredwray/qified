@@ -2,7 +2,7 @@ import type {Message, MessageProvider, TopicHandler} from '../types.js';
 
 export class MemoryMessageProvider implements MessageProvider {
 	private _subscriptions: Map<string, TopicHandler[]>;
-	private _initialized: boolean = false;
+	private _initialized = false;
 
 	constructor() {
 		this._subscriptions = new Map();
@@ -24,7 +24,6 @@ export class MemoryMessageProvider implements MessageProvider {
 		this._initialized = value;
 	}
 
-	// eslint-disable-next-line @typescript-eslint/no-empty-function
 	public async init(): Promise<void> {
 		this._initialized = true;
 	}
