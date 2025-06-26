@@ -39,6 +39,16 @@ export class Qified {
 	public set messageProviders(providers: MessageProvider[]) {
 		this._messageProviders = providers;
 	}
+
+	/**
+	 * Disconnects from all providers.
+	 * This method will call the `disconnect` method on each message provider.
+	 */
+	public async disconnect(): Promise<void> {
+		const promises = this._messageProviders.map(async provider => provider.disconnect());
+		await Promise.all(promises);
+		this._messageProviders = [];
+	}
 }
 
 export {MemoryMessageProvider} from './memory/message.js';
