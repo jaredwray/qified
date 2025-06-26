@@ -34,4 +34,13 @@ describe('Qified', () => {
 		expect(qified.messageProviders).toEqual(providers);
 		expect(qified.messageProviders.length).toBe(2);
 	});
+
+	test('should disconnect all message providers', async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({messageProviders: [memoryProvider]});
+		expect(qified.messageProviders.length).toBe(1);
+		await qified.disconnect();
+		expect(qified.messageProviders.length).toBe(0);
+		expect(memoryProvider.subscriptions.size).toBe(0);
+	});
 });
