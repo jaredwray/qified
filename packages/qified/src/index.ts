@@ -18,9 +18,16 @@ export type QifiedOptions = {
 };
 
 export class Qified {
-	private _defaultChannel: string;
+	private _defaultChannel: string = 'default';
+	private _messageProviders: Array<MessageProvider> = [];
 	constructor(options?: QifiedOptions) {
-		this._defaultChannel = options?.defaultChannel ?? 'default';
+		if(options) {
+			if (options.messageProviders) {
+				this._messageProviders = options.messageProviders;
+			}
+
+			this._defaultChannel = options?.defaultChannel ?? 'default';
+		}
 	}
 
 	get defaultChannel() {
@@ -30,4 +37,14 @@ export class Qified {
 	set defaultChannel(channel: string) {
 		this._defaultChannel = channel;
 	}
+
+	public get messageProviders(): Array<MessageProvider> {
+		return this._messageProviders;
+	}
+
+	public set messageProviders(providers: Array<MessageProvider>) {
+		this._messageProviders = providers;
+	}
 }
+
+export {MemoryMessageProvider} from './memory/message.js';
