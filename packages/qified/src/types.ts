@@ -45,18 +45,6 @@ export type MessageProvider = {
 	subscriptions: Map<string, TopicHandler[]>;
 
 	/**
-	 * Indicates whether the provider has been initialized
-	 * @type {boolean}
-	 */
-	initialized: boolean;
-
-	/**
-	 * Initialization and connects to the provider and passed the configuration object.
-	 * @param config - Configuration object for the provider
-	 */
-	init(config?: Record<string, any>): Promise<void>;
-
-	/**
 	 * Plublish a message to a topic / queue. This is used to send messages to subscribers.
 	 * @param topic - The topic or queue to publish the message to
 	 * @param message - The message to be published

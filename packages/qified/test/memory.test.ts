@@ -7,11 +7,6 @@ describe('MemoryMessageProvider', () => {
 	test('should initialize with empty subscriptions', async () => {
 		const provider = new MemoryMessageProvider();
 		expect(provider.subscriptions).toEqual(new Map());
-		expect(provider.initialized).toBe(false);
-		await provider.init();
-		expect(provider.initialized).toBe(true);
-		provider.initialized = false;
-		expect(provider.initialized).toBe(false);
 	});
 
 	test('should be able to set subscriptions', () => {

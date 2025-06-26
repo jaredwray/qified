@@ -2,7 +2,6 @@ import type {Message, MessageProvider, TopicHandler} from '../types.js';
 
 export class MemoryMessageProvider implements MessageProvider {
 	private _subscriptions: Map<string, TopicHandler[]>;
-	private _initialized = false;
 
 	constructor() {
 		this._subscriptions = new Map();
@@ -14,18 +13,6 @@ export class MemoryMessageProvider implements MessageProvider {
 
 	public set subscriptions(value: Map<string, TopicHandler[]>) {
 		this._subscriptions = value;
-	}
-
-	public get initialized(): boolean {
-		return this._initialized;
-	}
-
-	public set initialized(value: boolean) {
-		this._initialized = value;
-	}
-
-	public async init(): Promise<void> {
-		this._initialized = true;
 	}
 
 	public async publish(topic: string, message: Message): Promise<void> {
