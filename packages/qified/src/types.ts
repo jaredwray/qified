@@ -10,12 +10,6 @@ export type Message<T = any> = {
 	 */
 	id: string;
 	/**
-	 * The channel that the message belongs to. This is used to route the message to the correct
-	 * handler and is the same as the topic or queue in a pub/sub system.
-	 * @type {string}
-	 */
-	channel: string;
-	/**
 	 * The data of the message
 	 * @type {<T = any>}
 	 */

@@ -1,4 +1,6 @@
-import {type MessageProvider, type TaskProvider} from './types.js';
+import {
+	type TopicHandler, type MessageProvider, type TaskProvider, type Message,
+} from './types.js';
 
 export type QifiedOptions = {
 	/**
@@ -38,6 +40,26 @@ export class Qified {
 	 */
 	public set messageProviders(providers: MessageProvider[]) {
 		this._messageProviders = providers;
+	}
+
+	/**
+	 * Subscribes to a topic. If you have multiple message providers, it will subscribe to the topic on all of them.
+	 * @param {string} topic - The topic to subscribe to.
+	 * @param {TopicHandler} handler - The handler to call when a message is published to the topic.
+	 */
+	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
+		const promises = this._messageProviders.map(async provider => provider.subscribe(topic, handler));
+		await Promise.all(promises);
+	}
+
+	/**
+	 * Publishes a message to a topic. If you have multiple message providers, it will publish the message to all of them.
+	 * @param {string} topic - The topic to publish to.
+	 * @param {Message} message - The message to publish.
+	 */
+	public async publish(topic: string, message: Message): Promise<void> {
+		const promises = this._messageProviders.map(async provider => provider.publish(topic, message));
+		await Promise.all(promises);
 	}
 
 	/**
