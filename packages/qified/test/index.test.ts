@@ -82,4 +82,21 @@ describe('Qified Messaging', () => {
 		expect(memoryProvider.subscriptions.get('test/topic')?.length).toBe(1);
 		expect(handlerCalled).toBe(true);
 	});
+
+	test('should unsubscribe from a topic', async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({messageProviders: [memoryProvider]});
+		let handlerCalled = false;
+		const handler = async (message: Message) => {
+			handlerCalled = true;
+			expect(message.data.content).toBe('Hello, World!');
+		};
+
+		await qified.subscribe('test/topic', {id: 'testHandler', handler});
+		await qified.publish('test/topic', {id: 'testMessage', data: {content: 'Hello, World!'}});
+		expect(handlerCalled).toBe(true);
+
+		await qified.unsubscribe('test/topic', 'testHandler');
+		expect(memoryProvider.subscriptions.get('test/topic')?.length).toBe(0);
+	});
 });
