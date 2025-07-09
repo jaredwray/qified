@@ -1,5 +1,5 @@
 import {createClient, type RedisClientType} from 'redis';
-import type {Message, MessageProvider, TopicHandler} from './types.js';
+import type {Message, MessageProvider, TopicHandler} from 'qified';
 
 export type RedisMessageProviderOptions = {
 	url?: string;
