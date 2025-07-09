@@ -1,8 +1,10 @@
 import {createClient, type RedisClientType} from 'redis';
-import type {Message, MessageProvider, TopicHandler} from 'qified';
+import {
+	Qified, type Message, type MessageProvider, type TopicHandler,
+} from 'qified';
 
 export type RedisMessageProviderOptions = {
-	url?: string;
+	uri?: string;
 };
 
 export class RedisMessageProvider implements MessageProvider {
@@ -11,8 +13,8 @@ export class RedisMessageProvider implements MessageProvider {
 	private readonly sub: RedisClientType;
 
 	constructor(options: RedisMessageProviderOptions = {}) {
-		const url = options.url ?? 'redis://localhost:6379';
-		this.pub = createClient({url});
+		const uri = options.uri ?? 'redis://localhost:6379';
+		this.pub = createClient({url: uri});
 		this.sub = this.pub.duplicate();
 		void this.pub.connect();
 		void this.sub.connect();
@@ -60,4 +62,14 @@ export class RedisMessageProvider implements MessageProvider {
 		await this.pub.quit();
 		await this.sub.quit();
 	}
+}
+
+/**
+ * Creates a new instance of Qified with a Redis message provider.
+ * @param {RedisMessageProviderOptions} options Optional configuration for the Redis message provider.
+ * @returns A new instance of Qified.
+ */
+export function createQified(options?: RedisMessageProviderOptions): Qified {
+	const provider = new RedisMessageProvider(options);
+	return new Qified({messageProviders: [provider]});
 }

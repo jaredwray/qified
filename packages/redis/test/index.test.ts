@@ -1,6 +1,6 @@
 import {describe, test, expect} from 'vitest';
 import {Qified, type Message} from 'qified';
-import {RedisMessageProvider} from '../src/index.js';
+import {RedisMessageProvider, createQified} from '../src/index.js';
 
 describe('RedisMessageProvider', () => {
 	test('should publish and receive a message', async () => {
@@ -83,5 +83,12 @@ describe('RedisMessageProvider', () => {
 
 		await qified.unsubscribe('test-topic', id);
 		await qified.disconnect();
+	});
+
+	test('should create Qified instance with Redis provider', () => {
+		const qified = createQified();
+		expect(qified).toBeInstanceOf(Qified);
+		expect(qified.messageProviders.length).toBe(1);
+		expect(qified.messageProviders[0]).toBeInstanceOf(RedisMessageProvider);
 	});
 });
