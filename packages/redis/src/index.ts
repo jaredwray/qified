@@ -7,13 +7,15 @@ export type RedisMessageProviderOptions = {
 	uri?: string;
 };
 
+export const defaultRedisUri = 'redis://localhost:6379';
+
 export class RedisMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
 	private readonly pub: RedisClientType;
 	private readonly sub: RedisClientType;
 
 	constructor(options: RedisMessageProviderOptions = {}) {
-		const uri = options.uri ?? 'redis://localhost:6379';
+		const uri = options.uri ?? defaultRedisUri;
 		this.pub = createClient({url: uri});
 		this.sub = this.pub.duplicate();
 		void this.pub.connect();
