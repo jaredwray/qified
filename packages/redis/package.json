@@ -1,0 +1,51 @@
+{
+  "name": "@qified/redis",
+  "version": "0.1.0",
+  "description": "Redis message provider for qified",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "xo --fix && vitest run --coverage",
+    "test:ci": "xo && vitest run --coverage",
+    "clean": "rimraf ./dist ./coverage",
+    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+    "prepare": "pnpm build"
+  },
+  "keywords": [
+    "qified",
+    "redis",
+    "message",
+    "provider"
+  ],
+  "author": "Jared Wray <me@jaredwray.com>",
+  "license": "MIT",
+  "dependencies": {
+    "redis": "^4.6.7"
+  },
+  "peerDependencies": {
+    "qified": "workspace:^"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
+    "xo": "^1.1.1"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ]
+}

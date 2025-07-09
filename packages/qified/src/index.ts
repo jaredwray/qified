@@ -63,6 +63,17 @@ export class Qified {
 	}
 
 	/**
+	 * Unsubscribes from a topic. If you have multiple message providers, it will unsubscribe from the topic on all of them.
+	 * If an ID is provided, it will unsubscribe only that handler. If no ID is provided, it will unsubscribe all handlers for the topic.
+	 * @param topic - The topic to unsubscribe from.
+	 * @param id - The optional ID of the handler to unsubscribe. If not provided, all handlers for the topic will be unsubscribed.
+	 */
+	public async unsubscribe(topic: string, id?: string): Promise<void> {
+		const promises = this._messageProviders.map(async provider => provider.unsubscribe(topic, id));
+		await Promise.all(promises);
+	}
+
+	/**
 	 * Disconnects from all providers.
 	 * This method will call the `disconnect` method on each message provider.
 	 */
@@ -74,3 +85,6 @@ export class Qified {
 }
 
 export {MemoryMessageProvider} from './memory/message.js';
+export {
+	type TopicHandler, type MessageProvider, type TaskProvider, type Message,
+} from './types.js';

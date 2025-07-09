@@ -14,7 +14,7 @@ Task and Message Queues with Multiple Providers
 This is a mono repo that contains the following packages:
 * [qified](packages/qified/README.md) - The main package that contains the core functionality and a built in in-memory provider.
 
-There will be more packages added in the future such as:
+Additional packages:
 * [@qified/redis](packages/redis/README.md) - Redis Provider
 * [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
 
@@ -30,5 +30,4 @@ Qified is written in TypeScript and tests are written in `vitest`. To run the te
 To contribute follow the [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
 # License
-
 [MIT & © Jared Wray](LICENSE)
