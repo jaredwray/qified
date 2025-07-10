@@ -21,20 +21,36 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		this._uri = options.uri ?? defaultRabbitMqUri;
 	}
 
+	/**
+	 * Gets or sets the URI for the RabbitMQ server.
+	 * @returns {string} The URI of the RabbitMQ server.
+	 */
 	public get uri(): string {
 		return this._uri;
 	}
 
+	/**
+	 * Sets the URI for the RabbitMQ server and resets the connection and channel.
+	 * @param {string} value The new URI for the RabbitMQ server.
+	 */
 	public set uri(value: string) {
 		this._uri = value;
 		this._connection = undefined;
 		this._channel = undefined;
 	}
 
+	/**
+	 * Gets the consumer tags for the RabbitMQ subscriptions.
+	 * @returns {Map<string, string>} A map of topic names to consumer tags.
+	 */
 	public get consumerTags(): Map<string, string> {
 		return this._consumerTags;
 	}
 
+	/**
+	 * Gets the RabbitMQ client connection.
+	 * @returns {Promise<Channel>} A promise that resolves to the RabbitMQ channel.
+	 */
 	public async getClient(): Promise<Channel> {
 		this._connection ??= connect(this._uri);
 		// eslint-disable-next-line promise/prefer-await-to-then
@@ -42,6 +58,10 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		return this._channel;
 	}
 
+	/**
+	 * Gets the RabbitMQ channel.
+	 * @returns {Promise<Channel>} A promise that resolves to the RabbitMQ channel.
+	 */
 	public async getChannel(): Promise<Channel> {
 		if (!this._channel) {
 			await this.getClient();
@@ -50,13 +70,24 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		return this._channel!;
 	}
 
-	async publish(topic: string, message: Message): Promise<void> {
+	/**
+	 * Publishes a message to a specified topic.
+	 * @param {string} topic The topic to publish the message to.
+	 * @param {Message} message The message to publish.
+	 * @returns {Promise<void>} A promise that resolves when the message is published.
+	 */
+	public async publish(topic: string, message: Message): Promise<void> {
 		const channel = await this.getChannel();
 		await channel.assertQueue(topic);
 		channel.sendToQueue(topic, Buffer.from(JSON.stringify(message)));
 	}
 
-	async subscribe(topic: string, handler: TopicHandler): Promise<void> {
+	/**
+	 * Subscribes to a specified topic.
+	 * @param {string} topic The topic to subscribe to.
+	 * @param {TopicHandler} handler The handler to process incoming messages.
+	 */
+	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		const channel = await this.getChannel();
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
@@ -75,7 +106,13 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		this.subscriptions.get(topic)?.push(handler);
 	}
 
-	async unsubscribe(topic: string, id?: string): Promise<void> {
+	/**
+	 * Unsubscribes from a specified topic.
+	 * @param {string} topic The topic to unsubscribe from.
+	 * @param {string} [id] Optional identifier for the subscription to remove.
+	 * @returns {Promise<void>} A promise that resolves when the unsubscription is complete.
+	 */
+	public async unsubscribe(topic: string, id?: string): Promise<void> {
 		const channel = await this.getChannel();
 		if (id) {
 			const current = this.subscriptions.get(topic);
@@ -93,7 +130,11 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		}
 	}
 
-	async disconnect(): Promise<void> {
+	/**
+	 * Disconnects from the RabbitMQ server and cancels all subscriptions.
+	 * @returns {Promise<void>} A promise that resolves when the disconnection is complete.
+	 */
+	public async disconnect(): Promise<void> {
 		const channel = await this.getChannel();
 		for (const tag of this._consumerTags.values()) {
 			// eslint-disable-next-line no-await-in-loop
