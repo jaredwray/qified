@@ -38,7 +38,4 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ./packages/qified/coverage/lcov.info, \
-          ./packages/redis/coverage/lcov.info, \
-          ./packages/rabbitmq/coverage/lcov.info
-
+        files: ./packages/qified/coverage/lcov.info, ./packages/redis/coverage/lcov.info, ./packages/rabbitmq/coverage/lcov.info
