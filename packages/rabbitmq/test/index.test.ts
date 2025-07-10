@@ -1,8 +1,22 @@
 import {describe, test, expect} from 'vitest';
 import {Qified, type Message} from 'qified';
-import {RabbitMqMessageProvider, createQified} from '../src/index.js';
+import {RabbitMqMessageProvider, createQified, defaultRabbitMqUri} from '../src/index.js';
 
 describe('RabbitMqMessageProvider', () => {
+	test('should create an instance', () => {
+		const provider = new RabbitMqMessageProvider();
+		expect(provider).toBeInstanceOf(RabbitMqMessageProvider);
+		expect(provider.subscriptions.size).toBe(0);
+		expect(provider.consumerTags.size).toBe(0);
+	});
+
+	test('should set and get URI', () => {
+		const provider = new RabbitMqMessageProvider();
+		const uri = defaultRabbitMqUri;
+		provider.uri = uri;
+		expect(provider.uri).toBe(uri);
+	});
+
 	test('should publish and receive a message', async () => {
 		const provider = new RabbitMqMessageProvider();
 		const message: Message = {id: '1', data: 'test'};

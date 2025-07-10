@@ -12,17 +12,42 @@ export const defaultRabbitMqUri = 'amqp://localhost:5672';
 
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
-	private readonly connectionPromise: Promise<ChannelModel>;
-	private readonly channelPromise: Promise<Channel>;
-	private readonly consumerTags = new Map<string, string>();
+	private _connection: Promise<ChannelModel> | undefined;
+	private _channel: Promise<Channel> | undefined;
+	private readonly _consumerTags = new Map<string, string>();
+	private _uri: string;
 
 	constructor(options: RabbitMqMessageProviderOptions = {}) {
-		const uri = options.uri ?? defaultRabbitMqUri;
-		this.connectionPromise = connect(uri);
-		this.channelPromise = (async () => {
-			const connection = await this.connectionPromise;
-			return connection.createChannel();
-		})();
+		this._uri = options.uri ?? defaultRabbitMqUri;
+	}
+
+	public get uri(): string {
+		return this._uri;
+	}
+
+	public set uri(value: string) {
+		this._uri = value;
+		this._connection = undefined;
+		this._channel = undefined;
+	}
+
+	public get consumerTags(): Map<string, string> {
+		return this._consumerTags;
+	}
+
+	public async getClient(): Promise<Channel> {
+		this._connection ??= connect(this._uri);
+		// eslint-disable-next-line promise/prefer-await-to-then
+		this._channel ??= this._connection.then(async conn => conn.createChannel());
+		return this._channel;
+	}
+
+	public async getChannel(): Promise<Channel> {
+		if (!this._channel) {
+			await this.getClient();
+		}
+
+		return this._channel!;
 	}
 
 	async publish(topic: string, message: Message): Promise<void> {
@@ -44,7 +69,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 					channel.ack(message_);
 				}
 			});
-			this.consumerTags.set(topic, consumerTag);
+			this._consumerTags.set(topic, consumerTag);
 		}
 
 		this.subscriptions.get(topic)?.push(handler);
@@ -58,10 +83,10 @@ export class RabbitMqMessageProvider implements MessageProvider {
 				this.subscriptions.set(topic, current.filter(sub => sub.id !== id));
 			}
 		} else {
-			const tag = this.consumerTags.get(topic);
+			const tag = this._consumerTags.get(topic);
 			if (tag) {
 				await channel.cancel(tag);
-				this.consumerTags.delete(topic);
+				this._consumerTags.delete(topic);
 			}
 
 			this.subscriptions.delete(topic);
@@ -70,20 +95,16 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	async disconnect(): Promise<void> {
 		const channel = await this.getChannel();
-		for (const tag of this.consumerTags.values()) {
+		for (const tag of this._consumerTags.values()) {
 			// eslint-disable-next-line no-await-in-loop
 			await channel.cancel(tag);
 		}
 
-		this.consumerTags.clear();
+		this._consumerTags.clear();
 		this.subscriptions.clear();
 		await channel.close();
-		const connection = await this.connectionPromise;
-		await connection.close();
-	}
-
-	private async getChannel(): Promise<Channel> {
-		return this.channelPromise;
+		this._channel = undefined;
+		this._connection = undefined;
 	}
 }
 
