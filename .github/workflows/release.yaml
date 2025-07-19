@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
 jobs:
   build:
 
@@ -28,13 +31,12 @@ jobs:
 
     - name: Test Services
       run: pnpm test:services:start
-      
+
     - name: Testing
       run: pnpm test
 
     - name: Publish
       run: |
         pnpm publish:packages
-      env:
-        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        
 
