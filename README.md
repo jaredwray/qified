@@ -29,5 +29,18 @@ Qified is written in TypeScript and tests are written in `vitest`. To run the te
 
 To contribute follow the [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
+# Publishing
+
+This is a mono repo and uses [pnpm](https://pnpm.io/) for package management. In addition all packages are versioned using [semantic versioning](https://semver.org/) and are published using github actions. To do a version bump and publish, follow these steps:
+
+1. Make sure you have the latest changes from the main branch.
+2. Update the `package.json` in the root directory with the new version number.
+   - If you are making a breaking change, use the `major` version bump. `X.0.0`
+   - If you are adding new features, use the `minor` version bump. `0.X.0`
+   - If you are making a bug fix, use the `patch` version bump. `0.0.X`
+3. Sync the version changes to all packages by running `pnpm version:sync`.
+4. Check the changes and commit them to the main branch.
+5. Do a release on GitHub. This will trigger the GitHub Actions workflow to publish the packages.
+
 # License
 [MIT & © Jared Wray](LICENSE)

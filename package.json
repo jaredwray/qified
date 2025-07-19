@@ -1,7 +1,8 @@
 {
   "name": "@qified/mono",
-  "version": "1.0.0",
+  "version": "0.2.1",
   "private": true,
+  "type": "module",
   "description": "Qified Mono Repo",
   "scripts": {
     "test": "pnpm -r test",
@@ -10,6 +11,7 @@
     "test:services:stop": "docker compose down",
     "website:build": "npx docula build",
     "website:serve": "npx docula serve",
+    "version:sync": "tsx scripts/version-sync.ts",
     "build": "pnpm -r build",
     "clean": "pnpm -r clean"
   },
@@ -19,6 +21,7 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",
     "docula": "^0.13.1",
+    "tsx": "^4.20.3",
     "vitest": "^3.2.4"
   }
 }
