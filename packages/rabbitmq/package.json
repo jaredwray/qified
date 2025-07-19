@@ -42,9 +42,9 @@
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4",
-    "xo": "^1.1.1",
+    "xo": "^1.2.1",
     "@types/amqplib": "^0.10.7",
-    "@types/node": "^22.0.0"
+    "@types/node": "^24.0.15"
   },
   "files": [
     "dist",
