@@ -11,6 +11,7 @@
     "test:services:stop": "docker compose down",
     "website:build": "npx docula build",
     "website:serve": "npx docula serve",
+    "version:sync": "tsx scripts/version-sync.ts",
     "build": "pnpm -r build",
     "clean": "pnpm -r clean"
   },

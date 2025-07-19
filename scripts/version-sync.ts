@@ -16,7 +16,6 @@ async function bumpVersionInFile(filePath, newVersion) {
 
 async function bumpVersionInPackages(newVersion) {
 	const packages = await fs.promises.readdir(packagesDir, { withFileTypes: true });
-	console.log(packages);
 	for (const dirent of packages) {
 		if (dirent.isDirectory()) {
 			const dirPath = path.join(packagesDir, dirent.name);
