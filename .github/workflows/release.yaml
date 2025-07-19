@@ -35,6 +35,11 @@ jobs:
     - name: Testing
       run: pnpm test
 
+    - name: create npmrc
+      run: |
+        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+        echo "always-auth=true" >> ~/.npmrc
+
     - name: Publish
       run: |
         pnpm publish:packages
