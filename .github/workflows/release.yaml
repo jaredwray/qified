@@ -26,12 +26,15 @@ jobs:
     - name: Build    
       run: pnpm build
 
-    - name: Testing    
+    - name: Test Services
+      run: pnpm test:services:start
+      
+    - name: Testing
       run: pnpm test
 
     - name: Publish
       run: |
-        pnpm publish -r
+        pnpm publish:packages
       env:
         NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
