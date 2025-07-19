@@ -12,7 +12,8 @@
     "website:build": "npx docula build",
     "website:serve": "npx docula serve",
     "version:sync": "tsx scripts/version-sync.ts",
-    "publish:packages": "pnpm publish -r --filter=packages/qified && pnpm publish -r --filter=!packages/qified",
+    "publish:qified": "pnpm recursive --filter 'qified' run publish",
+    "publish:packages": "pnpm publish:qified && pnpm recursive --filter '!qified' run publish",
     "build": "pnpm -r build",
     "clean": "pnpm -r clean"
   },
