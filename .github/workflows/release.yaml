@@ -1,0 +1,37 @@
+name: release
+
+on:
+  workflow_dispatch:
+  release:
+    types: [released]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js 22
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install Dependencies
+      run: npm install pnpm -g && pnpm install
+
+    - name: Build    
+      run: pnpm build
+
+    - name: Testing    
+      run: pnpm test
+
+    - name: Publish
+      run: |
+        pnpm publish -r
+      env:
+        NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
