@@ -14,3 +14,9 @@ services:
     container_name: redis
     ports:
       - "6379:6379" # Redis port
+
+  nats:
+    image: nats:latest
+    container_name: nats
+    ports:
+      - "4222:4222" # NATS port
