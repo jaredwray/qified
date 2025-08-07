@@ -31,6 +31,9 @@ jobs:
     - name: Test Services
       run: pnpm test:services:start
 
+    - name: Wait for Services
+      run: sleep 10
+
     - name: Testing    
       run: pnpm test:ci
       
