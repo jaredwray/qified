@@ -17,6 +17,7 @@ This is a mono repo that contains the following packages:
 Additional packages:
 * [@qified/redis](packages/redis/README.md) - Redis Provider
 * [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
+* [@qified/nats](packages/nats/README.md) - NATS Provider
 
 # Development and Testing
 

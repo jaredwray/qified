@@ -1,0 +1,54 @@
+{
+  "name": "@qified/nats",
+  "version": "0.1.0",
+  "description": "NATS message provider for qified",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "biome check --write && vitest run --coverage",
+    "test:ci": "biome check && vitest run --coverage",
+    "clean": "rimraf ./dist ./coverage",
+    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+    "prepare": "pnpm build"
+  },
+  "keywords": [
+    "qified",
+    "nats",
+    "message",
+    "provider",
+    "publish",
+    "subscribe"
+  ],
+  "author": "Santosh Bandichode <santoshg550@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@nats-io/transport-node": "^3.1.0",
+    "nats": "^2.29.3"
+  },
+  "peerDependencies": {
+    "qified": "workspace:^"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ]
+}
