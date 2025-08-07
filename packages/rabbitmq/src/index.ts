@@ -1,14 +1,17 @@
-import {Buffer} from 'node:buffer';
-import {connect, type ChannelModel, type Channel} from 'amqplib';
+import { Buffer } from "node:buffer";
+import { type Channel, type ChannelModel, connect } from "amqplib";
 import {
-	Qified, type Message, type MessageProvider, type TopicHandler,
-} from 'qified';
+	type Message,
+	type MessageProvider,
+	Qified,
+	type TopicHandler,
+} from "qified";
 
 export type RabbitMqMessageProviderOptions = {
 	uri?: string;
 };
 
-export const defaultRabbitMqUri = 'amqp://localhost:5672';
+export const defaultRabbitMqUri = "amqp://localhost:5672";
 
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -53,8 +56,9 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 */
 	public async getClient(): Promise<Channel> {
 		this._connection ??= connect(this._uri);
-		// eslint-disable-next-line promise/prefer-await-to-then
-		this._channel ??= this._connection.then(async conn => conn.createChannel());
+		this._channel ??= this._connection.then(async (conn) =>
+			conn.createChannel(),
+		);
 		return this._channel;
 	}
 
@@ -67,6 +71,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 			await this.getClient();
 		}
 
+		// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the channel is created before use
 		return this._channel!;
 	}
 
@@ -92,11 +97,11 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
 			await channel.assertQueue(topic);
-			const {consumerTag} = await channel.consume(topic, async message_ => {
+			const { consumerTag } = await channel.consume(topic, async (message_) => {
 				if (message_) {
 					const message = JSON.parse(message_.content.toString()) as Message;
 					const handlers = this.subscriptions.get(topic) ?? [];
-					await Promise.all(handlers.map(async sub => sub.handler(message)));
+					await Promise.all(handlers.map(async (sub) => sub.handler(message)));
 					channel.ack(message_);
 				}
 			});
@@ -117,7 +122,10 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		if (id) {
 			const current = this.subscriptions.get(topic);
 			if (current) {
-				this.subscriptions.set(topic, current.filter(sub => sub.id !== id));
+				this.subscriptions.set(
+					topic,
+					current.filter((sub) => sub.id !== id),
+				);
 			}
 		} else {
 			const tag = this._consumerTags.get(topic);
@@ -137,7 +145,6 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	public async disconnect(): Promise<void> {
 		const channel = await this.getChannel();
 		for (const tag of this._consumerTags.values()) {
-			// eslint-disable-next-line no-await-in-loop
 			await channel.cancel(tag);
 		}
 
@@ -156,5 +163,5 @@ export class RabbitMqMessageProvider implements MessageProvider {
  */
 export function createQified(options?: RabbitMqMessageProviderOptions): Qified {
 	const provider = new RabbitMqMessageProvider(options);
-	return new Qified({messageProviders: [provider]});
+	return new Qified({ messageProviders: [provider] });
 }
