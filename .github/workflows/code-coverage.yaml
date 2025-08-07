@@ -32,7 +32,7 @@ jobs:
       run: pnpm test:services:start
 
     - name: Wait for Services
-      run: sleep 10
+      run: sleep 5
 
     - name: Testing    
       run: pnpm test:ci
