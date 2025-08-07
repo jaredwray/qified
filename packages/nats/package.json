@@ -20,6 +20,7 @@
     "test:ci": "biome check && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+    "build:publish": "pnpm build && pnpm publish --access public",
     "prepare": "pnpm build"
   },
   "keywords": [
