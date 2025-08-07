@@ -1,4 +1,4 @@
-
+// biome-ignore-all lint/suspicious/noExplicitAny: This is a type definition, so any type is acceptable here.
 /**
  * Message interface for the message provider
  * @template T - The type of the message data
@@ -26,7 +26,10 @@ export type Message<T = any> = {
 	headers?: Record<string, string>;
 };
 
-export type TopicHandler = {id?: string; handler: (message: Message) => Promise<void>};
+export type TopicHandler = {
+	id?: string;
+	handler: (message: Message) => Promise<void>;
+};
 
 /**
  * MessageProvider interface for the message provider
@@ -108,7 +111,10 @@ export type TaskProvider = {
 	 * Array of handlers for task processing
 	 * @type {Array<{taskName: string; handler: (payload: Task) => Promise<void>}>}
 	 */
-	taskHandlers: Array<{taskName: string; handler: (payload: Task) => Promise<void>}>;
+	taskHandlers: Array<{
+		taskName: string;
+		handler: (payload: Task) => Promise<void>;
+	}>;
 
 	/**
 	 * Array of handlers for task processing
@@ -131,7 +137,10 @@ export type TaskProvider = {
 	 * @param handler - The handler function to process the task
 	 * @returns {Promise<void>}
 	 */
-	dequeue(taskName: string, handler: (payload: Task) => Promise<void>): Promise<void>;
+	dequeue(
+		taskName: string,
+		handler: (payload: Task) => Promise<void>,
+	): Promise<void>;
 
 	/**
 	 * Disconnect and clean up the provider. This is used to stop receiving tasks from the provider.

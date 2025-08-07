@@ -1,4 +1,4 @@
-import type {Message, MessageProvider, TopicHandler} from '../types.js';
+import type { Message, MessageProvider, TopicHandler } from "../types.js";
 
 export class MemoryMessageProvider implements MessageProvider {
 	private _subscriptions: Map<string, TopicHandler[]>;
@@ -18,7 +18,6 @@ export class MemoryMessageProvider implements MessageProvider {
 	public async publish(topic: string, message: Message): Promise<void> {
 		const subscriptions = this._subscriptions.get(topic) ?? [];
 		for (const subscription of subscriptions) {
-			// eslint-disable-next-line no-await-in-loop
 			await subscription.handler(message);
 		}
 	}
@@ -35,7 +34,10 @@ export class MemoryMessageProvider implements MessageProvider {
 		if (id) {
 			const subscriptions = this._subscriptions.get(topic);
 			if (subscriptions) {
-				this._subscriptions.set(topic, subscriptions.filter(sub => sub.id !== id));
+				this._subscriptions.set(
+					topic,
+					subscriptions.filter((sub) => sub.id !== id),
+				);
 			}
 		} else {
 			this._subscriptions.delete(topic);

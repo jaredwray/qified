@@ -1,55 +1,55 @@
 {
-  "name": "qified",
-  "version": "0.3.0",
-  "description": "Task and Message Queues with Multiple Providers",
-  "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "require": "./dist/index.cjs",
-      "import": "./dist/index.js"
-    }
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "test": "xo --fix && vitest run --coverage",
-    "test:ci": "xo && vitest run --coverage",
-    "clean": "rimraf ./dist ./coverage ./site/dist",
-    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
-    "build:publish": "pnpm build && pnpm publish --access public",
-    "prepare": "pnpm build"
-  },
-  "keywords": [
-    "queue",
-    "task",
-    "message",
-    "provider",
-    "qified"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jaredwray/qified.git"
-  },
-  "author": "Jared Wray <me@jaredwray.com>",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/jaredwray/qified/issues"
-  },
-  "homepage": "https://github.com/jaredwray/qified#readme",
-  "devDependencies": {
-    "@vitest/coverage-v8": "^3.2.4",
-    "rimraf": "^6.0.1",
-    "tsup": "^8.5.0",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4",
-    "xo": "^1.2.1"
-  },
-  "files": [
-    "dist",
-    "LICENSE"
-  ]
+	"name": "qified",
+	"version": "0.3.0",
+	"description": "Task and Message Queues with Multiple Providers",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"require": "./dist/index.cjs",
+			"import": "./dist/index.js"
+		}
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"scripts": {
+		"test": "biome check --write && vitest run --coverage",
+		"test:ci": "biome check && vitest run --coverage",
+		"clean": "rimraf ./dist ./coverage ./site/dist",
+		"build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+		"build:publish": "pnpm build && pnpm publish --access public",
+		"prepare": "pnpm build"
+	},
+	"keywords": [
+		"queue",
+		"task",
+		"message",
+		"provider",
+		"qified"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/jaredwray/qified.git"
+	},
+	"author": "Jared Wray <me@jaredwray.com>",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/jaredwray/qified/issues"
+	},
+	"homepage": "https://github.com/jaredwray/qified#readme",
+	"devDependencies": {
+		"@biomejs/biome": "^2.1.4",
+		"@vitest/coverage-v8": "^3.2.4",
+		"rimraf": "^6.0.1",
+		"tsup": "^8.5.0",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.4"
+	},
+	"files": [
+		"dist",
+		"LICENSE"
+	]
 }
