@@ -1,6 +1,9 @@
-import {
-	type TopicHandler, type MessageProvider, type TaskProvider, type Message,
-} from './types.js';
+import type {
+	Message,
+	MessageProvider,
+	TaskProvider,
+	TopicHandler,
+} from "./types.js";
 
 export type QifiedOptions = {
 	/**
@@ -48,7 +51,9 @@ export class Qified {
 	 * @param {TopicHandler} handler - The handler to call when a message is published to the topic.
 	 */
 	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
-		const promises = this._messageProviders.map(async provider => provider.subscribe(topic, handler));
+		const promises = this._messageProviders.map(async (provider) =>
+			provider.subscribe(topic, handler),
+		);
 		await Promise.all(promises);
 	}
 
@@ -58,7 +63,9 @@ export class Qified {
 	 * @param {Message} message - The message to publish.
 	 */
 	public async publish(topic: string, message: Message): Promise<void> {
-		const promises = this._messageProviders.map(async provider => provider.publish(topic, message));
+		const promises = this._messageProviders.map(async (provider) =>
+			provider.publish(topic, message),
+		);
 		await Promise.all(promises);
 	}
 
@@ -69,7 +76,9 @@ export class Qified {
 	 * @param id - The optional ID of the handler to unsubscribe. If not provided, all handlers for the topic will be unsubscribed.
 	 */
 	public async unsubscribe(topic: string, id?: string): Promise<void> {
-		const promises = this._messageProviders.map(async provider => provider.unsubscribe(topic, id));
+		const promises = this._messageProviders.map(async (provider) =>
+			provider.unsubscribe(topic, id),
+		);
 		await Promise.all(promises);
 	}
 
@@ -78,13 +87,18 @@ export class Qified {
 	 * This method will call the `disconnect` method on each message provider.
 	 */
 	public async disconnect(): Promise<void> {
-		const promises = this._messageProviders.map(async provider => provider.disconnect());
+		const promises = this._messageProviders.map(async (provider) =>
+			provider.disconnect(),
+		);
 		await Promise.all(promises);
 		this._messageProviders = [];
 	}
 }
 
-export {MemoryMessageProvider} from './memory/message.js';
-export {
-	type TopicHandler, type MessageProvider, type TaskProvider, type Message,
-} from './types.js';
+export { MemoryMessageProvider } from "./memory/message.js";
+export type {
+	Message,
+	MessageProvider,
+	TaskProvider,
+	TopicHandler,
+} from "./types.js";

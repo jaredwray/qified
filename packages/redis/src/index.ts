@@ -1,13 +1,16 @@
-import {createClient, type RedisClientType} from 'redis';
 import {
-	Qified, type Message, type MessageProvider, type TopicHandler,
-} from 'qified';
+	type Message,
+	type MessageProvider,
+	Qified,
+	type TopicHandler,
+} from "qified";
+import { createClient, type RedisClientType } from "redis";
 
 export type RedisMessageProviderOptions = {
 	uri?: string;
 };
 
-export const defaultRedisUri = 'redis://localhost:6379';
+export const defaultRedisUri = "redis://localhost:6379";
 
 export class RedisMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -16,7 +19,7 @@ export class RedisMessageProvider implements MessageProvider {
 
 	constructor(options: RedisMessageProviderOptions = {}) {
 		const uri = options.uri ?? defaultRedisUri;
-		this.pub = createClient({url: uri});
+		this.pub = createClient({ url: uri });
 		this.sub = this.pub.duplicate();
 		void this.pub.connect();
 		void this.sub.connect();
@@ -29,10 +32,10 @@ export class RedisMessageProvider implements MessageProvider {
 	async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
-			await this.sub.subscribe(topic, async raw => {
+			await this.sub.subscribe(topic, async (raw) => {
 				const message = JSON.parse(raw) as Message;
 				const handlers = this.subscriptions.get(topic) ?? [];
-				await Promise.all(handlers.map(async sub => sub.handler(message)));
+				await Promise.all(handlers.map(async (sub) => sub.handler(message)));
 			});
 		}
 
@@ -45,7 +48,7 @@ export class RedisMessageProvider implements MessageProvider {
 			if (current) {
 				this.subscriptions.set(
 					topic,
-					current.filter(sub => sub.id !== id),
+					current.filter((sub) => sub.id !== id),
 				);
 			}
 		} else {
@@ -73,5 +76,5 @@ export class RedisMessageProvider implements MessageProvider {
  */
 export function createQified(options?: RedisMessageProviderOptions): Qified {
 	const provider = new RedisMessageProvider(options);
-	return new Qified({messageProviders: [provider]});
+	return new Qified({ messageProviders: [provider] });
 }
