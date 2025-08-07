@@ -1,14 +1,17 @@
-import {type Subscription, type NatsConnection} from 'nats';
-import {connect} from '@nats-io/transport-node';
+import { connect } from "@nats-io/transport-node";
+import type { NatsConnection, Subscription } from "nats";
 import {
-	Qified, type Message, type MessageProvider, type TopicHandler,
-} from 'qified';
+	type Message,
+	type MessageProvider,
+	Qified,
+	type TopicHandler,
+} from "qified";
 
 export type NatsMessageProviderOptions = {
 	uri?: string;
 };
 
-export const defaultNatsUri = 'localhost:4222';
+export const defaultNatsUri = "localhost:4222";
 
 export class NatsMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -42,7 +45,7 @@ export class NatsMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the connection is made.
 	 */
 	public async createConnection(): Promise<void> {
-		this._connection ??= await connect({servers: this._uri});
+		this._connection ??= await connect({ servers: this._uri });
 	}
 
 	/**
@@ -53,6 +56,7 @@ export class NatsMessageProvider implements MessageProvider {
 	 */
 	public async publish(topic: string, message: Message): Promise<void> {
 		await this.createConnection();
+		// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the connection is created before use
 		this._connection!.publish(topic, JSON.stringify(message));
 	}
 
@@ -67,6 +71,7 @@ export class NatsMessageProvider implements MessageProvider {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
 
+			// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the connection is created before use
 			const sub = this._connection!.subscribe(topic);
 
 			this._subscriptions.set(topic, sub);
@@ -75,7 +80,7 @@ export class NatsMessageProvider implements MessageProvider {
 				for await (const m of sub) {
 					const message = JSON.parse(m.string()) as Message;
 					const handlers = this.subscriptions.get(topic) ?? [];
-					await Promise.all(handlers.map(async sub => sub.handler(message)));
+					await Promise.all(handlers.map(async (sub) => sub.handler(message)));
 				}
 			})();
 		}
@@ -93,7 +98,10 @@ export class NatsMessageProvider implements MessageProvider {
 		if (id) {
 			const current = this.subscriptions.get(topic);
 			if (current) {
-				this.subscriptions.set(topic, current.filter(sub => sub.id !== id));
+				this.subscriptions.set(
+					topic,
+					current.filter((sub) => sub.id !== id),
+				);
 			}
 		} else {
 			await this._subscriptions.get(topic)?.drain();
@@ -122,5 +130,5 @@ export class NatsMessageProvider implements MessageProvider {
  */
 export function createQified(options?: NatsMessageProviderOptions): Qified {
 	const provider = new NatsMessageProvider(options);
-	return new Qified({messageProviders: [provider]});
+	return new Qified({ messageProviders: [provider] });
 }
