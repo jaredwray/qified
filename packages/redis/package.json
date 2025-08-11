@@ -1,6 +1,6 @@
 {
   "name": "@qified/redis",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Redis message provider for qified",
   "type": "module",
   "main": "./dist/index.cjs",
