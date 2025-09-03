@@ -1,6 +1,6 @@
 {
   "name": "@qified/rabbitmq",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "RabbitMQ message provider for qified",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -22,7 +22,7 @@
     "clean": "rimraf ./dist ./coverage",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
     "build:publish": "pnpm build && pnpm publish --access public",
-    "prepare": "pnpm build"
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "qified",
