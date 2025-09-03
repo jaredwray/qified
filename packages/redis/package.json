@@ -33,13 +33,13 @@
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
-    "redis": "^5.8.0"
+    "redis": "^5.8.2"
   },
   "peerDependencies": {
     "qified": "workspace:^"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.1.4",
+    "@biomejs/biome": "^2.2.2",
     "@vitest/coverage-v8": "^3.2.4",
     "rimraf": "^6.0.1",
     "tsup": "^8.5.0",
