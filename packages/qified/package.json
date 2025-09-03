@@ -22,7 +22,7 @@
     "clean": "rimraf ./dist ./coverage ./site/dist",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
     "build:publish": "pnpm build && pnpm publish --access public",
-    "prepare": "pnpm build"
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "queue",
