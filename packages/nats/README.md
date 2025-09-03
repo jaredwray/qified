@@ -2,7 +2,7 @@
 
 NATS message provider for [Qified](https://github.com/jaredwray/qified).
 
-This package implements a message provider backed by NATS using the `publish`/`subscribe` operations.
+This package implements a message provider backed by NATS using the `publish`/`subscribe` operations. A special thanks to [Santosh Bandichode](mailto:santoshg550@gmail.com) for creating this package!
 
 ## Table of Contents
 
