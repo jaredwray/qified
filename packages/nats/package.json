@@ -32,7 +32,10 @@
     "publish",
     "subscribe"
   ],
-  "author": "Santosh Bandichode <santoshg550@gmail.com>",
+  "author": "Jared Wray <me@jaredwray.com>",
+  "contributors": [
+    "Santosh Bandichode <santoshg550@gmail.com>"
+  ],
   "license": "MIT",
   "dependencies": {
     "@nats-io/transport-node": "^3.1.0",
