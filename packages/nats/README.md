@@ -90,6 +90,28 @@ Disconnects from the NATS server and clears all subscriptions.
 
 Convenience factory that returns a `Qified` instance configured with `NatsMessageProvider`.
 
+## Draining Messages
+
+NATS allows processing in-flight messages before unsubscribing/disconnecting. If this is needed, override unsubscribe and/or disconnect methods and call drain instead of unsubscribe/close.
+
+```typescript
+public async unsubscribe(topic: string, id?: string): Promise<void> {
+    // ...
+    await this._subscriptions.get(topic)?.drain();
+    // ...
+}
+```
+
+```typescript
+public async disconnect(): Promise<void> {
+    // ...
+    await this._connection?.drain();
+    // ...
+}
+```
+
+Please read [NATS Pub/Sub](https://github.com/nats-io/nats.js/blob/main/core/README.md) to know about message draining.
+
 ## Contributing
 
 Contributions are welcome! Please read the [CONTRIBUTING.md](../../CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) for details on our process.
