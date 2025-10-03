@@ -104,7 +104,7 @@ export class NatsMessageProvider implements MessageProvider {
 				);
 			}
 		} else {
-			await this._subscriptions.get(topic)?.drain();
+			this._subscriptions.get(topic)?.unsubscribe();
 			this._subscriptions.delete(topic);
 
 			this.subscriptions.delete(topic);
@@ -118,7 +118,7 @@ export class NatsMessageProvider implements MessageProvider {
 	public async disconnect(): Promise<void> {
 		this.subscriptions.clear();
 
-		await this._connection?.drain();
+		await this._connection?.close();
 		this._connection = undefined;
 	}
 }

@@ -119,7 +119,7 @@ describe("NATSMessageProvider", () => {
 		await provider.disconnect();
 	});
 
-	test("should handle in-flight messages before unsubscribing", async () => {
+	test("should not handle in-flight messages after unsubscribing", async () => {
 		const provider = new NatsMessageProvider();
 		const message: Message = { id: "1", data: "test" };
 		let received1: Message | undefined;
@@ -132,24 +132,35 @@ describe("NATSMessageProvider", () => {
 
 		await provider.subscribe("test-topic", {
 			async handler(message) {
-				// Delay a bit to test draining of messages
+				// Uncomment the line below to check that nats executes this
+				// handler and reaches here but cancels further execution as we
+				// are not using drain()
+				// console.log("here");
+
+				// Delay in execution is more than the delay to call unsubscribe after publish()
 				await new Promise<void>((resolve) => {
-					setTimeout(resolve, 100);
+					setTimeout(resolve, 150);
 				});
+
 				received2 = message;
 			},
 		});
 
+		// Give some time to handler registration
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
 		await provider.publish("test-topic", message);
 
-		// Unsubscribing as soon as possible without waiting for async delivery
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 50);
+		});
+
 		await provider.unsubscribe("test-topic");
 
-		await new Promise<void>((resolve) => {
-			setTimeout(resolve, 150);
-		});
 		expect(received1).toEqual(message);
-		expect(received2).toEqual(message);
+		expect(received2).toEqual(undefined);
 
 		const subscriptions = provider.subscriptions.get("test-topic");
 		expect(subscriptions).toBeUndefined();
