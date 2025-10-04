@@ -120,10 +120,20 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 * @param {Message} message The message to publish.
 	 * @returns {Promise<void>} A promise that resolves when the message is published.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		const channel = await this.getChannel();
 		await channel.assertQueue(topic);
-		channel.sendToQueue(topic, Buffer.from(JSON.stringify(message)));
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
+		channel.sendToQueue(
+			topic,
+			Buffer.from(JSON.stringify(messageWithProvider)),
+		);
 	}
 
 	/**
