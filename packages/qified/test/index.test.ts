@@ -139,4 +139,23 @@ describe("Qified Messaging", () => {
 		expect(emittedData.topic).toBe("test/topic");
 		expect(emittedData.id).toBe("testHandler");
 	});
+
+	test("should emit publish event when publish succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let publishEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.publish, async (data: any) => {
+			publishEmitted = true;
+			emittedData = data;
+		});
+
+		const message = { id: "testMessage", data: { content: "Hello" } };
+		await qified.publish("test/topic", message);
+
+		expect(publishEmitted).toBe(true);
+		expect(emittedData.topic).toBe("test/topic");
+		expect(emittedData.message).toEqual(message);
+	});
 });

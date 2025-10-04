@@ -81,10 +81,16 @@ export class Qified extends Hookified {
 		topic: string,
 		message: Omit<Message, "providerId">,
 	): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.publish(topic, message),
-		);
-		await Promise.all(promises);
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.publish(topic, message),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.publish, { topic, message });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
