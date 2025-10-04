@@ -156,6 +156,104 @@ Disconnect from all providers and clean up resources.
 await qified.disconnect();
 ```
 
+## Events
+
+Qified extends [Hookified](https://hookified.org) and emits events for all major operations. You can listen to these events to add custom logging, monitoring, or error handling.
+
+### Available Events
+
+The following events are available via the `QifiedEvents` enum:
+
+- `QifiedEvents.publish` - Emitted after a message is successfully published
+- `QifiedEvents.subscribe` - Emitted after successfully subscribing to a topic
+- `QifiedEvents.unsubscribe` - Emitted after successfully unsubscribing from a topic
+- `QifiedEvents.disconnect` - Emitted after successfully disconnecting from all providers
+- `QifiedEvents.error` - Emitted when an error occurs during any operation
+- `QifiedEvents.info` - Emitted for informational messages
+- `QifiedEvents.warn` - Emitted for warning messages
+
+### Listening to Events
+
+Use the `on()` method to listen to events:
+
+```typescript
+import { Qified, MemoryMessageProvider, QifiedEvents } from 'qified';
+
+const qified = new Qified({
+  messageProviders: [new MemoryMessageProvider()]
+});
+
+// Listen for publish events
+await qified.on(QifiedEvents.publish, async (data) => {
+  console.log('Message published to topic:', data.topic);
+  console.log('Message:', data.message);
+});
+
+// Listen for subscribe events
+await qified.on(QifiedEvents.subscribe, async (data) => {
+  console.log('Subscribed to topic:', data.topic);
+  console.log('Handler ID:', data.handler.id);
+});
+
+// Listen for unsubscribe events
+await qified.on(QifiedEvents.unsubscribe, async (data) => {
+  console.log('Unsubscribed from topic:', data.topic);
+  if (data.id) {
+    console.log('Handler ID:', data.id);
+  }
+});
+
+// Listen for disconnect events
+await qified.on(QifiedEvents.disconnect, async () => {
+  console.log('Disconnected from all providers');
+});
+
+// Listen for errors
+await qified.on(QifiedEvents.error, async (error) => {
+  console.error('Error occurred:', error);
+});
+
+// Now perform operations
+await qified.subscribe('events', {
+  id: 'handler1',
+  handler: async (message) => {
+    console.log('Received:', message.data);
+  }
+});
+
+await qified.publish('events', {
+  id: 'msg-1',
+  data: { text: 'Hello!' }
+});
+
+await qified.unsubscribe('events', 'handler1');
+await qified.disconnect();
+```
+
+### Error Handling with Events
+
+Events provide a centralized way to handle errors across all operations:
+
+```typescript
+import { Qified, QifiedEvents } from 'qified';
+import { NatsMessageProvider } from '@qified/nats';
+
+const qified = new Qified({
+  messageProviders: [new NatsMessageProvider()]
+});
+
+// Centralized error handler
+await qified.on(QifiedEvents.error, async (error) => {
+  console.error('Qified error:', error.message);
+  // Send to error tracking service
+  // Log to file
+  // Send alert
+});
+
+// Errors from publish, subscribe, etc. will be caught and emitted
+await qified.publish('topic', { id: '1', data: { test: true } });
+```
+
 ### Properties
 
 #### `messageProviders: MessageProvider[]`
