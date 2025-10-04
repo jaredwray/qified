@@ -119,4 +119,24 @@ describe("Qified Messaging", () => {
 		await qified.unsubscribe("test/topic", "testHandler");
 		expect(memoryProvider.subscriptions.get("test/topic")?.length).toBe(0);
 	});
+
+	test("should emit unsubscribe event when unsubscribe succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let unsubscribeEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.unsubscribe, async (data: any) => {
+			unsubscribeEmitted = true;
+			emittedData = data;
+		});
+
+		const handler = async (_message: any) => {};
+		await qified.subscribe("test/topic", { id: "testHandler", handler });
+		await qified.unsubscribe("test/topic", "testHandler");
+
+		expect(unsubscribeEmitted).toBe(true);
+		expect(emittedData.topic).toBe("test/topic");
+		expect(emittedData.id).toBe("testHandler");
+	});
 });

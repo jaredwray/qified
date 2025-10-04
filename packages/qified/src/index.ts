@@ -94,10 +94,16 @@ export class Qified extends Hookified {
 	 * @param id - The optional ID of the handler to unsubscribe. If not provided, all handlers for the topic will be unsubscribed.
 	 */
 	public async unsubscribe(topic: string, id?: string): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.unsubscribe(topic, id),
-		);
-		await Promise.all(promises);
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.unsubscribe(topic, id),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.unsubscribe, { topic, id });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
