@@ -17,15 +17,15 @@ Task and Message Queues with Multiple Providers
 * Simple Message Format `Message`
 * Easily Send a Message `publish()`
 * Easily Subscribe to a message Queue `subscribe()`
-* Simple Task Format `Task`
-* Easily Send a Task `enqueue()`
-* Easily Subscribe to a Task Queue `dequeue()`
-* Simple Acknowledge `Acknowledge()` in handler
+* Simple Task Format `Task` (Coming in v2.0.0)
+* Easily Send a Task `enqueue()` (Coming in v2.0.0)
+* Easily Subscribe to a Task Queue `dequeue()` (Coming in v2.0.0)
+* Simple Acknowledge `Acknowledge()` in handler (Coming in v2.0.0)
 * Async/Await Built In By Default
 * Written in Typescript, Nodejs Last Two Versions, ESM and CJS
 * Events and Hooks for all major actions via [Hookified](https://hookified.org)
-* Customizable Serialize / Deserialize Handlers
-* Customizable Compress / Decompress Handlers
+* Customizable Serialize / Deserialize Handlers (Coming in v2.0.0)
+* Customizable Compress / Decompress Handlers (Coming in v2.0.0)
 * Provider Fail Over Support
 
 # Installation
@@ -297,7 +297,7 @@ type TopicHandler = {
 
 ### Task<T>
 
-The task type used for task queues (coming soon).
+The task type used for task queues (coming in v2.0.0).
 
 ```typescript
 type Task<T = any> = {
