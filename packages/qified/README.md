@@ -349,33 +349,67 @@ await qified.publish('notifications', {
 });
 ```
 
-## Multiple Providers (Failover)
+## Using Multiple Message Providers
+
+Qified supports using multiple message providers simultaneously for redundancy, failover, or broadcasting messages across different message brokers. When you configure multiple providers:
+
+- **`subscribe()`** subscribes to the topic on **all** providers
+- **`publish()`** publishes the message to **all** providers
+- **`unsubscribe()`** unsubscribes from **all** providers
+- **Handler behavior**: Your handler will receive messages from **all** providers
+
+This is useful for:
+- **Redundancy**: If one provider fails, messages continue flowing through others
+- **Migration**: Gradually migrate from one message broker to another
+- **Broadcasting**: Send messages to multiple messaging systems simultaneously
 
 ```typescript
-import { Qified, MemoryMessageProvider } from 'qified';
+import { Qified } from 'qified';
+import { NatsMessageProvider } from '@qified/nats';
+import { RabbitMqMessageProvider } from '@qified/rabbitmq';
 
-// Use multiple providers for redundancy
-const qified = new Qified({
-  messageProviders: [
-    new MemoryMessageProvider(),
-    new MemoryMessageProvider()
-  ]
+// Create multiple providers
+const natsProvider = new NatsMessageProvider({
+  uri: 'localhost:4222'
 });
 
-// Subscribes to both providers
-await qified.subscribe('critical-events', {
-  id: 'criticalHandler',
+const rabbitProvider = new RabbitMqMessageProvider({
+  uri: 'amqp://localhost:5672'
+});
+
+// Configure Qified with both providers
+const qified = new Qified({
+  messageProviders: [natsProvider, rabbitProvider]
+});
+
+// Subscribe once - but subscribes to BOTH NATS and RabbitMQ
+await qified.subscribe('orders', {
+  id: 'orderProcessor',
   handler: async (message) => {
-    console.log('Critical event:', message.data);
+    console.log('Order received:', message.data);
+    // This handler will be called for messages from EITHER provider
   }
 });
 
-// Publishes to both providers
-await qified.publish('critical-events', {
-  id: 'evt-001',
-  data: { level: 'critical', message: 'System alert!' }
+// Publish once - but publishes to BOTH NATS and RabbitMQ
+await qified.publish('orders', {
+  id: 'order-001',
+  data: {
+    orderId: '12345',
+    items: ['item1', 'item2'],
+    total: 99.99
+  }
 });
+// The message is now in both NATS and RabbitMQ queues
+
+// Clean up - disconnects from BOTH providers
+await qified.disconnect();
 ```
+
+**Important Notes:**
+- When publishing to multiple providers, each provider receives the same message
+- Your handler may receive the same message multiple times (once from each provider) if you're both publishing and subscribing with multiple providers
+- All operations (`subscribe`, `publish`, `unsubscribe`, `disconnect`) execute in parallel across all providers using `Promise.all()`
 
 ## Typed Messages
 
