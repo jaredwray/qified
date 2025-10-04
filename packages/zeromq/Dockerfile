@@ -8,6 +8,10 @@ RUN apk add --no-cache \
     make \
     g++
 
+# Create non-root user
+RUN addgroup -g 1001 -S zeromq && \
+    adduser -u 1001 -S zeromq -G zeromq
+
 # Create app directory
 WORKDIR /app
 
@@ -16,6 +20,12 @@ RUN npm install zeromq@6
 
 # Copy proxy script
 COPY proxy.js .
+
+# Change ownership to non-root user
+RUN chown -R zeromq:zeromq /app
+
+# Switch to non-root user
+USER zeromq
 
 # Expose ZeroMQ proxy ports
 EXPOSE 5555 5556
