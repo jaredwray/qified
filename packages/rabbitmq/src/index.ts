@@ -7,21 +7,60 @@ import {
 	type TopicHandler,
 } from "qified";
 
+/**
+ * Configuration options for the RabbitMQ message provider.
+ */
 export type RabbitMqMessageProviderOptions = {
+	/**
+	 * The URI of the RabbitMQ server to connect to.
+	 * @default "amqp://localhost:5672"
+	 */
 	uri?: string;
+	/**
+	 * The unique identifier for this provider instance.
+	 * @default "@qified/rabbitmq"
+	 */
+	id?: string;
 };
 
 export const defaultRabbitMqUri = "amqp://localhost:5672";
+export const defaultRabbitMqId = "@qified/rabbitmq";
 
+/**
+ * RabbitMQ message provider for qified.
+ * Provides pub/sub messaging using RabbitMQ as the message broker.
+ */
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
 	private _connection: Promise<ChannelModel> | undefined;
 	private _channel: Promise<Channel> | undefined;
 	private readonly _consumerTags = new Map<string, string>();
 	private _uri: string;
+	private _id: string;
 
+	/**
+	 * Creates an instance of RabbitMqMessageProvider.
+	 * @param {RabbitMqMessageProviderOptions} options - Optional configuration for the provider.
+	 */
 	constructor(options: RabbitMqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultRabbitMqUri;
+		this._id = options.id ?? defaultRabbitMqId;
+	}
+
+	/**
+	 * Gets the provider ID for the RabbitMQ message provider.
+	 * @returns {string} The provider ID.
+	 */
+	public get id(): string {
+		return this._id;
+	}
+
+	/**
+	 * Sets the provider ID for the RabbitMQ message provider.
+	 * @param {string} id The new provider ID.
+	 */
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	/**
@@ -81,16 +120,28 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 * @param {Message} message The message to publish.
 	 * @returns {Promise<void>} A promise that resolves when the message is published.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		const channel = await this.getChannel();
 		await channel.assertQueue(topic);
-		channel.sendToQueue(topic, Buffer.from(JSON.stringify(message)));
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
+		channel.sendToQueue(
+			topic,
+			Buffer.from(JSON.stringify(messageWithProvider)),
+		);
 	}
 
 	/**
 	 * Subscribes to a specified topic.
+	 * Creates a queue for the topic if it doesn't exist and registers a consumer.
 	 * @param {string} topic The topic to subscribe to.
 	 * @param {TopicHandler} handler The handler to process incoming messages.
+	 * @returns {Promise<void>} A promise that resolves when the subscription is complete.
 	 */
 	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		const channel = await this.getChannel();
@@ -113,6 +164,8 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	/**
 	 * Unsubscribes from a specified topic.
+	 * If an ID is provided, only the handler with that ID is removed.
+	 * If no ID is provided, the consumer is cancelled and all handlers for the topic are removed.
 	 * @param {string} topic The topic to unsubscribe from.
 	 * @param {string} [id] Optional identifier for the subscription to remove.
 	 * @returns {Promise<void>} A promise that resolves when the unsubscription is complete.
@@ -140,6 +193,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	/**
 	 * Disconnects from the RabbitMQ server and cancels all subscriptions.
+	 * Closes the channel and clears the connection.
 	 * @returns {Promise<void>} A promise that resolves when the disconnection is complete.
 	 */
 	public async disconnect(): Promise<void> {
@@ -158,8 +212,17 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 /**
  * Creates a new instance of Qified with a RabbitMQ message provider.
+ * This is a convenience function for quickly setting up a Qified instance with RabbitMQ.
  * @param {RabbitMqMessageProviderOptions} options Optional configuration for the RabbitMQ message provider.
- * @returns A new instance of Qified.
+ * @returns {Qified} A new instance of Qified configured with a RabbitMQ provider.
+ * @example
+ * ```typescript
+ * const qified = createQified({ uri: 'amqp://localhost:5672' });
+ * await qified.subscribe('my-topic', {
+ *   id: 'myHandler',
+ *   handler: async (message) => console.log(message)
+ * });
+ * ```
  */
 export function createQified(options?: RabbitMqMessageProviderOptions): Qified {
 	const provider = new RabbitMqMessageProvider(options);

@@ -58,17 +58,20 @@ describe("MemoryMessageProvider", () => {
 	test("should publish a message to the correct topic", async () => {
 		const provider = new MemoryMessageProvider();
 		const message: Message = { id: "foo", data: { test: "message" } };
-		let handlerMessage = "";
-		const handler = async (message: any) => {
-			expect(message).toEqual(message);
-			handlerMessage = message as string;
+		let handlerMessage: Message | undefined;
+		const handler = async (msg: Message) => {
+			handlerMessage = msg;
 		};
 
 		await provider.subscribe("test/topic", { id: "test", handler });
 
 		await provider.publish("test/topic", message);
 
-		expect(handlerMessage).toEqual(message);
+		expect(handlerMessage).toEqual({
+			...message,
+			providerId: "@qified/memory",
+		});
+		expect(handlerMessage?.providerId).toBe("@qified/memory");
 	});
 
 	test("should disconnect and clear subscriptions", async () => {
@@ -78,5 +81,32 @@ describe("MemoryMessageProvider", () => {
 		expect(provider.subscriptions.size).toBe(1);
 		await provider.disconnect();
 		expect(provider.subscriptions.size).toBe(0);
+	});
+
+	test("should get default provider id", () => {
+		const provider = new MemoryMessageProvider();
+		expect(provider.id).toBe("@qified/memory");
+	});
+
+	test("should set and get custom provider id", () => {
+		const provider = new MemoryMessageProvider();
+		provider.id = "custom-memory-id";
+		expect(provider.id).toBe("custom-memory-id");
+	});
+
+	test("should set custom provider ID in published messages", async () => {
+		const customId = "custom-memory-provider";
+		const provider = new MemoryMessageProvider({ id: customId });
+		const message: Message = { id: "foo", data: { test: "message" } };
+		let handlerMessage: Message | undefined;
+		const handler = async (msg: Message) => {
+			handlerMessage = msg;
+		};
+
+		await provider.subscribe("test/topic", { id: "test", handler });
+		await provider.publish("test/topic", message);
+
+		expect(handlerMessage?.providerId).toBe(customId);
+		expect(handlerMessage).toEqual({ ...message, providerId: customId });
 	});
 });

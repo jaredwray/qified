@@ -6,29 +6,86 @@ import {
 } from "qified";
 import { createClient, type RedisClientType } from "redis";
 
+/**
+ * Configuration options for the Redis message provider.
+ */
 export type RedisMessageProviderOptions = {
+	/** Redis connection URI. Defaults to "redis://localhost:6379" */
 	uri?: string;
+	/** Unique identifier for this provider instance. Defaults to "@qified/reddis" */
+	id?: string;
 };
 
+/** Default Redis connection URI */
 export const defaultRedisUri = "redis://localhost:6379";
 
+/** Default Redis provider identifier */
+export const defaultRedisId = "@qified/reddis";
+
+/**
+ * Redis-based message provider for Qified.
+ * Uses Redis pub/sub to enable message distribution across multiple instances.
+ */
 export class RedisMessageProvider implements MessageProvider {
+	/** Map of topic names to their registered handlers */
 	public subscriptions = new Map<string, TopicHandler[]>();
+
+	/** Redis client used for publishing messages */
 	private readonly pub: RedisClientType;
+
+	/** Redis client used for subscribing to messages */
 	private readonly sub: RedisClientType;
 
+	private _id: string;
+
+	/**
+	 * Creates a new Redis message provider instance.
+	 * @param options Configuration options for the provider
+	 */
 	constructor(options: RedisMessageProviderOptions = {}) {
 		const uri = options.uri ?? defaultRedisUri;
+		this._id = options.id ?? defaultRedisId;
 		this.pub = createClient({ url: uri });
 		this.sub = this.pub.duplicate();
 		void this.pub.connect();
 		void this.sub.connect();
 	}
 
-	async publish(topic: string, message: Message): Promise<void> {
-		await this.pub.publish(topic, JSON.stringify(message));
+	/**
+	 * Gets the unique identifier for this provider instance.
+	 */
+	public get id(): string {
+		return this._id;
 	}
 
+	/**
+	 * Sets the unique identifier for this provider instance.
+	 */
+	public set id(id: string) {
+		this._id = id;
+	}
+
+	/**
+	 * Publishes a message to a specific topic.
+	 * @param topic The topic to publish to
+	 * @param message The message to publish
+	 */
+	async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
+		await this.pub.publish(topic, JSON.stringify(messageWithProvider));
+	}
+
+	/**
+	 * Subscribes to a topic with a handler function.
+	 * @param topic The topic to subscribe to
+	 * @param handler The handler function to call when messages are received
+	 */
 	async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
@@ -42,6 +99,11 @@ export class RedisMessageProvider implements MessageProvider {
 		this.subscriptions.get(topic)?.push(handler);
 	}
 
+	/**
+	 * Unsubscribes from a topic, either for a specific handler or all handlers.
+	 * @param topic The topic to unsubscribe from
+	 * @param id Optional handler ID. If provided, only that handler is removed. Otherwise, all handlers are removed.
+	 */
 	async unsubscribe(topic: string, id?: string): Promise<void> {
 		if (id) {
 			const current = this.subscriptions.get(topic);
@@ -57,6 +119,9 @@ export class RedisMessageProvider implements MessageProvider {
 		}
 	}
 
+	/**
+	 * Disconnects from Redis, unsubscribing from all topics and closing connections.
+	 */
 	async disconnect(): Promise<void> {
 		const topics = [...this.subscriptions.keys()];
 		if (topics.length > 0) {

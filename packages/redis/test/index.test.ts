@@ -1,11 +1,15 @@
 import { type Message, Qified } from "qified";
 import { describe, expect, test } from "vitest";
-import { createQified, RedisMessageProvider } from "../src/index.js";
+import {
+	createQified,
+	defaultRedisId,
+	RedisMessageProvider,
+} from "../src/index.js";
 
 describe("RedisMessageProvider", () => {
 	test("should publish and receive a message", async () => {
 		const provider = new RedisMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await provider.subscribe("test-topic", {
@@ -19,7 +23,7 @@ describe("RedisMessageProvider", () => {
 		await new Promise<void>((resolve) => {
 			setTimeout(resolve, 100);
 		});
-		expect(received).toEqual(message);
+		expect(received).toEqual({ ...message, providerId: defaultRedisId });
 
 		await provider.unsubscribe("test-topic", id);
 		await provider.disconnect();
@@ -27,7 +31,7 @@ describe("RedisMessageProvider", () => {
 
 	test("should unsubscribe all handlers with no id", async () => {
 		const provider = new RedisMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
 		await provider.subscribe("test-topic", {
@@ -51,8 +55,8 @@ describe("RedisMessageProvider", () => {
 		await new Promise<void>((resolve) => {
 			setTimeout(resolve, 100);
 		});
-		expect(received1).toEqual(message);
-		expect(received2).toEqual(message);
+		expect(received1).toEqual({ ...message, providerId: defaultRedisId });
+		expect(received2).toEqual({ ...message, providerId: defaultRedisId });
 
 		await provider.unsubscribe("test-topic");
 
@@ -65,7 +69,7 @@ describe("RedisMessageProvider", () => {
 	test("should be able to use with Qified", async () => {
 		const provider = new RedisMessageProvider();
 		const qified = new Qified({ messageProviders: [provider] });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await qified.subscribe("test-topic", {
@@ -79,7 +83,7 @@ describe("RedisMessageProvider", () => {
 		await new Promise<void>((resolve) => {
 			setTimeout(resolve, 100);
 		});
-		expect(received).toEqual(message);
+		expect(received).toEqual({ ...message, providerId: defaultRedisId });
 
 		await qified.unsubscribe("test-topic", id);
 		await qified.disconnect();
@@ -90,5 +94,21 @@ describe("RedisMessageProvider", () => {
 		expect(qified).toBeInstanceOf(Qified);
 		expect(qified.messageProviders.length).toBe(1);
 		expect(qified.messageProviders[0]).toBeInstanceOf(RedisMessageProvider);
+	});
+
+	test("should get provider id", () => {
+		const provider = new RedisMessageProvider();
+		expect(provider.id).toBe(defaultRedisId);
+	});
+
+	test("should set provider id", async () => {
+		const customId = "custom-redis-id";
+		const provider = new RedisMessageProvider({ id: customId });
+		expect(provider.id).toBe(customId);
+
+		provider.id = "new-id";
+		expect(provider.id).toBe("new-id");
+
+		await provider.disconnect();
 	});
 });

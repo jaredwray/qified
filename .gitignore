@@ -137,3 +137,6 @@ site/.DS_Store
 package-lock.json
 .DS_Store
 pnpm-lock.yaml
+
+# AI
+.claude

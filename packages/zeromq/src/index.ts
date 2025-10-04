@@ -7,25 +7,73 @@ import {
 } from "qified";
 import { Publisher, Subscriber } from "zeromq";
 
+/**
+ * Configuration options for the ZeroMQ message provider.
+ */
 export type ZmqMessageProviderOptions = {
+	/** ZeroMQ connection URI. Defaults to "tcp://localhost:5555" */
 	uri?: string;
+	/** Unique identifier for this provider instance. Defaults to "@qified/zeromq" */
+	id?: string;
 };
 
+/** Default ZeroMQ connection URI */
 export const defaultZmqUri = "tcp://localhost:5555";
 
+/** Default ZeroMQ provider identifier */
+export const defaultZmqId = "@qified/zeromq";
+
+/**
+ * ZeroMQ-based message provider for Qified.
+ * Uses ZeroMQ pub/sub pattern to enable message distribution across multiple instances.
+ */
 export class ZmqMessageProvider implements MessageProvider {
+	/** Map of topic names to their registered handlers */
 	public subscriptions = new Map<string, TopicHandler[]>();
 
+	/** ZeroMQ subscriber socket */
 	private _subscriber: Subscriber | undefined;
+
+	/** ZeroMQ publisher socket */
 	private _publisher: Publisher | undefined;
+
+	/** Connection URI for ZeroMQ */
 	private _uri: string;
+
+	/** Flag indicating if the subscriber is actively listening for messages */
 	private _awaitingMessages: boolean;
 
+	private _id: string;
+
+	/**
+	 * Creates a new ZeroMQ message provider instance.
+	 * @param options Configuration options for the provider
+	 */
 	constructor(options: ZmqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultZmqUri;
+		this._id = options.id ?? defaultZmqId;
 		this._awaitingMessages = false;
 	}
 
+	/**
+	 * Gets the unique identifier for this provider instance.
+	 */
+	public get id(): string {
+		return this._id;
+	}
+
+	/**
+	 * Sets the unique identifier for this provider instance.
+	 */
+	public set id(id: string) {
+		this._id = id;
+	}
+
+	/**
+	 * Creates ZeroMQ publisher and subscriber connections.
+	 * Publisher binds to the URI, subscriber connects to it.
+	 * @private
+	 */
 	private async _createConnection(): Promise<void> {
 		// Publisher `binds` and subscriber `connects`
 
@@ -46,9 +94,19 @@ export class ZmqMessageProvider implements MessageProvider {
 	 * @param {Message} message The message to publish.
 	 * @returns {Promise<void>} A promise that resolves when the message is published.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		await this._createConnection();
-		await this._publisher?.send([topic, Buffer.from(JSON.stringify(message))]);
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
+		await this._publisher?.send([
+			topic,
+			Buffer.from(JSON.stringify(messageWithProvider)),
+		]);
 	}
 
 	/**
