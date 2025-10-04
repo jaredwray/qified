@@ -14,7 +14,7 @@
     "version:sync": "tsx scripts/version-sync.ts",
     "publish:qified": "pnpm recursive --filter 'qified' run build:publish",
     "publish:packages": "pnpm publish:qified && pnpm recursive --filter '!qified' run build:publish",
-    "build": "pnpm -r build",
+    "build": "pnpm --filter qified build && pnpm --filter '!qified' -r build",
     "clean": "pnpm -r clean"
   },
   "keywords": [],
