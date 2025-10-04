@@ -1,9 +1,23 @@
+import { Hookified, type HookifiedOptions } from "hookified";
 import type {
 	Message,
 	MessageProvider,
 	TaskProvider,
 	TopicHandler,
 } from "./types.js";
+
+/**
+ * Standard events emitted by Qified.
+ */
+export enum QifiedEvents {
+	error = "error",
+	info = "info",
+	warn = "warn",
+	publish = "publish",
+	subscribe = "subscribe",
+	unsubscribe = "unsubscribe",
+	disconnect = "disconnect",
+}
 
 export type QifiedOptions = {
 	/**
@@ -15,15 +29,16 @@ export type QifiedOptions = {
 	 * The task providers to use.
 	 */
 	taskProviders?: TaskProvider[];
-};
+} & HookifiedOptions;
 
-export class Qified {
+export class Qified extends Hookified {
 	private _messageProviders: MessageProvider[] = [];
 	/**
 	 * Creates an instance of Qified.
 	 * @param {QifiedOptions} options - Optional configuration for Qified.
 	 */
 	constructor(options?: QifiedOptions) {
+		super(options);
 		if (options?.messageProviders) {
 			this._messageProviders = options.messageProviders;
 		}
@@ -51,10 +66,16 @@ export class Qified {
 	 * @param {TopicHandler} handler - The handler to call when a message is published to the topic.
 	 */
 	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.subscribe(topic, handler),
-		);
-		await Promise.all(promises);
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.subscribe(topic, handler),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.subscribe, { topic, handler });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
@@ -62,11 +83,20 @@ export class Qified {
 	 * @param {string} topic - The topic to publish to.
 	 * @param {Message} message - The message to publish.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.publish(topic, message),
-		);
-		await Promise.all(promises);
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.publish(topic, message),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.publish, { topic, message });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
@@ -76,10 +106,16 @@ export class Qified {
 	 * @param id - The optional ID of the handler to unsubscribe. If not provided, all handlers for the topic will be unsubscribed.
 	 */
 	public async unsubscribe(topic: string, id?: string): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.unsubscribe(topic, id),
-		);
-		await Promise.all(promises);
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.unsubscribe(topic, id),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.unsubscribe, { topic, id });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
@@ -87,11 +123,17 @@ export class Qified {
 	 * This method will call the `disconnect` method on each message provider.
 	 */
 	public async disconnect(): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.disconnect(),
-		);
-		await Promise.all(promises);
-		this._messageProviders = [];
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.disconnect(),
+			);
+			await Promise.all(promises);
+			this._messageProviders = [];
+			this.emit(QifiedEvents.disconnect);
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 }
 

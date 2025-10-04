@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: This is a test file and explicit any is acceptable here.
 import { describe, expect, test } from "vitest";
-import { MemoryMessageProvider, Qified } from "../src/index.js";
+import { MemoryMessageProvider, Qified, QifiedEvents } from "../src/index.js";
 import type { Message } from "../src/types.js";
 
 describe("Qified", () => {
@@ -43,6 +43,20 @@ describe("Qified", () => {
 		await qified.disconnect();
 		expect(qified.messageProviders.length).toBe(0);
 		expect(memoryProvider.subscriptions.size).toBe(0);
+	});
+
+	test("should emit disconnect event when disconnect succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let disconnectEmitted = false;
+
+		await qified.on(QifiedEvents.disconnect, async () => {
+			disconnectEmitted = true;
+		});
+
+		await qified.disconnect();
+		expect(disconnectEmitted).toBe(true);
+		expect(qified.messageProviders.length).toBe(0);
 	});
 });
 
@@ -104,5 +118,63 @@ describe("Qified Messaging", () => {
 
 		await qified.unsubscribe("test/topic", "testHandler");
 		expect(memoryProvider.subscriptions.get("test/topic")?.length).toBe(0);
+	});
+
+	test("should emit unsubscribe event when unsubscribe succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let unsubscribeEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.unsubscribe, async (data: any) => {
+			unsubscribeEmitted = true;
+			emittedData = data;
+		});
+
+		const handler = async (_message: any) => {};
+		await qified.subscribe("test/topic", { id: "testHandler", handler });
+		await qified.unsubscribe("test/topic", "testHandler");
+
+		expect(unsubscribeEmitted).toBe(true);
+		expect(emittedData.topic).toBe("test/topic");
+		expect(emittedData.id).toBe("testHandler");
+	});
+
+	test("should emit publish event when publish succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let publishEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.publish, async (data: any) => {
+			publishEmitted = true;
+			emittedData = data;
+		});
+
+		const message = { id: "testMessage", data: { content: "Hello" } };
+		await qified.publish("test/topic", message);
+
+		expect(publishEmitted).toBe(true);
+		expect(emittedData.topic).toBe("test/topic");
+		expect(emittedData.message).toEqual(message);
+	});
+
+	test("should emit subscribe event when subscribe succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let subscribeEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.subscribe, async (data: any) => {
+			subscribeEmitted = true;
+			emittedData = data;
+		});
+
+		const handler = async (_message: any) => {};
+		await qified.subscribe("test/topic", { id: "testHandler", handler });
+
+		expect(subscribeEmitted).toBe(true);
+		expect(emittedData.topic).toBe("test/topic");
+		expect(emittedData.handler.id).toBe("testHandler");
 	});
 });
