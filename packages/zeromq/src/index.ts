@@ -11,7 +11,7 @@ export type ZmqMessageProviderOptions = {
 	uri?: string;
 };
 
-export const defaultZmqUri = "tcp://localhost:3000";
+export const defaultZmqUri = "tcp://localhost:5555";
 
 export class ZmqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();

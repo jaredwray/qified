@@ -17,8 +17,7 @@
   },
   "scripts": {
     "lint": "biome check --write --error-on-warnings",
-    "test": "pnpm lint && vitest --pool threads --poolOptions.threads.singleThread run --coverage",
-    "test:debug": "vitest --inspect-brk --pool threads --poolOptions.threads.singleThread --testTimeout 0",
+    "test": "pnpm lint && vitest run --coverage",
     "test:ci": "biome check --error-on-warnings && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
     "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
