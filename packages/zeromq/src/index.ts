@@ -58,13 +58,19 @@ export class ZmqMessageProvider implements MessageProvider {
 	 * @param {Message} message The message to publish.
 	 * @returns {Promise<void>} A promise that resolves when the message is published.
 	 */
-	public async publish(topic: string, message: Omit<Message, "providerId">): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		await this._createConnection();
 		const messageWithProvider: Message = {
 			...message,
 			providerId: this._id,
 		};
-		await this._publisher?.send([topic, Buffer.from(JSON.stringify(messageWithProvider))]);
+		await this._publisher?.send([
+			topic,
+			Buffer.from(JSON.stringify(messageWithProvider)),
+		]);
 	}
 
 	/**

@@ -33,7 +33,8 @@ describe("ZmqMessageProvider", () => {
 			setTimeout(resolve, 100);
 		});
 
-		expect(received).toEqual(message);
+		expect(received).toEqual({ ...message, providerId: "@qified/zeromq" });
+		expect(received?.providerId).toBe("@qified/zeromq");
 
 		await provider.unsubscribe("test-topic", id);
 		await provider.disconnect();
@@ -71,8 +72,8 @@ describe("ZmqMessageProvider", () => {
 		const firstSubscriptions = provider.subscriptions.get("test-topic");
 		expect(firstSubscriptions?.length).toBe(2);
 
-		expect(received1).toEqual(message);
-		expect(received2).toEqual(message);
+		expect(received1).toEqual({ ...message, providerId: "@qified/zeromq" });
+		expect(received2).toEqual({ ...message, providerId: "@qified/zeromq" });
 
 		await provider.unsubscribe("test-topic");
 
@@ -83,7 +84,7 @@ describe("ZmqMessageProvider", () => {
 	});
 
 	test("should be able to use with Qified", async () => {
-		const provider = new ZmqMessageProvider();
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5556" });
 		const qified = new Qified({ messageProviders: [provider] });
 		const message: Message = { id: "1", data: "test" };
 		let received: Message | undefined;
@@ -107,7 +108,7 @@ describe("ZmqMessageProvider", () => {
 			setTimeout(resolve, 100);
 		});
 
-		expect(received).toEqual(message);
+		expect(received).toEqual({ ...message, providerId: "@qified/zeromq" });
 
 		await qified.unsubscribe("test-topic", id);
 		await qified.disconnect();
@@ -118,5 +119,41 @@ describe("ZmqMessageProvider", () => {
 		expect(qified).toBeInstanceOf(Qified);
 		expect(qified.messageProviders.length).toBe(1);
 		expect(qified.messageProviders[0]).toBeInstanceOf(ZmqMessageProvider);
+	});
+
+	test("should set custom provider ID in published messages", async () => {
+		const customId = "custom-zeromq-provider";
+		const provider = new ZmqMessageProvider({
+			uri: "tcp://localhost:5557",
+			id: customId,
+		});
+		const message: Message = { id: "1", data: "test" };
+		let received: Message | undefined;
+		const handlerId = "test-handler";
+
+		await provider.subscribe("test-topic", {
+			id: handlerId,
+			async handler(message) {
+				received = message;
+			},
+		});
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		await provider.publish("test-topic", message);
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		expect(received?.providerId).toBe(customId);
+		expect(received).toEqual({ ...message, providerId: customId });
+
+		await provider.unsubscribe("test-topic", handlerId);
+		await provider.disconnect();
 	});
 });
