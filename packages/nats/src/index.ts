@@ -7,8 +7,19 @@ import {
 	type TopicHandler,
 } from "qified";
 
+/**
+ * Configuration options for the NATS message provider.
+ */
 export type NatsMessageProviderOptions = {
+	/**
+	 * The URI of the NATS server to connect to.
+	 * @default "localhost:4222"
+	 */
 	uri?: string;
+	/**
+	 * The unique identifier for this provider instance.
+	 * @default "@qified/nats"
+	 */
 	id?: string;
 };
 
@@ -27,10 +38,18 @@ export class NatsMessageProvider implements MessageProvider {
 		this._id = options.id ?? defaultNatsId;
 	}
 
+	/**
+	 * Gets the provider ID for the NATS message provider.
+	 * @returns {string} The provider ID.
+	 */
 	public get id(): string {
 		return this._id;
 	}
 
+	/**
+	 * Sets the provider ID for the NATS message provider.
+	 * @param {string} id The new provider ID.
+	 */
 	public set id(id: string) {
 		this._id = id;
 	}
@@ -66,10 +85,17 @@ export class NatsMessageProvider implements MessageProvider {
 	 * @param {Message} message The message to publish.
 	 * @returns {Promise<void>} A promise that resolves when the message is published.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		await this.createConnection();
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
 		// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the connection is created before use
-		this._connection!.publish(topic, JSON.stringify(message));
+		this._connection!.publish(topic, JSON.stringify(messageWithProvider));
 	}
 
 	/**
