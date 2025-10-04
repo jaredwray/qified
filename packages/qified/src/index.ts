@@ -66,10 +66,16 @@ export class Qified extends Hookified {
 	 * @param {TopicHandler} handler - The handler to call when a message is published to the topic.
 	 */
 	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.subscribe(topic, handler),
-		);
-		await Promise.all(promises);
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.subscribe(topic, handler),
+			);
+			await Promise.all(promises);
+			this.emit(QifiedEvents.subscribe, { topic, handler });
+			/* c8 ignore next 3 */
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 
 	/**
