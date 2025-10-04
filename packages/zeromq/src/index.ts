@@ -9,9 +9,11 @@ import { Publisher, Subscriber } from "zeromq";
 
 export type ZmqMessageProviderOptions = {
 	uri?: string;
+	id?: string;
 };
 
 export const defaultZmqUri = "tcp://localhost:5555";
+export const defaultZmqId = "@qified/zeromq";
 
 export class ZmqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -20,10 +22,20 @@ export class ZmqMessageProvider implements MessageProvider {
 	private _publisher: Publisher | undefined;
 	private _uri: string;
 	private _awaitingMessages: boolean;
+	private _id: string;
 
 	constructor(options: ZmqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultZmqUri;
+		this._id = options.id ?? defaultZmqId;
 		this._awaitingMessages = false;
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	private async _createConnection(): Promise<void> {

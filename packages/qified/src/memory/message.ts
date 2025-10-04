@@ -1,10 +1,26 @@
 import type { Message, MessageProvider, TopicHandler } from "../types.js";
 
+export type MemoryMessageProviderOptions = {
+	id?: string;
+};
+
+export const defaultMemoryId = "@qified/memory";
+
 export class MemoryMessageProvider implements MessageProvider {
 	private _subscriptions: Map<string, TopicHandler[]>;
+	private _id;
 
-	constructor() {
+	constructor(options?: MemoryMessageProviderOptions) {
 		this._subscriptions = new Map();
+		this._id = options?.id ?? defaultMemoryId;
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	public get subscriptions(): Map<string, TopicHandler[]> {

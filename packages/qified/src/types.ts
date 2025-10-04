@@ -10,6 +10,10 @@ export type Message<T = any> = {
 	 */
 	id: string;
 	/**
+	 * the provider that passed the message
+	 */
+	providerId: string;
+	/**
 	 * The data of the message
 	 * @type {<T = any>}
 	 */
@@ -35,6 +39,12 @@ export type TopicHandler = {
  * MessageProvider interface for the message provider
  */
 export type MessageProvider = {
+	/**
+	 * The id of the message provider. Use primary when multiple providers
+	 * are used.
+	 */
+	id: string;
+
 	/**
 	 * Array of handlers for message processing
 	 * @type {Map<string, Array<TopicHandler>>}

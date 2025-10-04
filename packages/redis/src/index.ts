@@ -8,21 +8,33 @@ import { createClient, type RedisClientType } from "redis";
 
 export type RedisMessageProviderOptions = {
 	uri?: string;
+	id?: string;
 };
 
 export const defaultRedisUri = "redis://localhost:6379";
+export const defaultRedisId = "@qified/reddis";
 
 export class RedisMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
 	private readonly pub: RedisClientType;
 	private readonly sub: RedisClientType;
+	private _id: string;
 
 	constructor(options: RedisMessageProviderOptions = {}) {
 		const uri = options.uri ?? defaultRedisUri;
+		this._id = options.id ?? defaultRedisId;
 		this.pub = createClient({ url: uri });
 		this.sub = this.pub.duplicate();
 		void this.pub.connect();
 		void this.sub.connect();
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	async publish(topic: string, message: Message): Promise<void> {

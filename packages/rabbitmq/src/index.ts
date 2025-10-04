@@ -9,9 +9,11 @@ import {
 
 export type RabbitMqMessageProviderOptions = {
 	uri?: string;
+	id?: string;
 };
 
 export const defaultRabbitMqUri = "amqp://localhost:5672";
+export const defaultRabbitMqId = "@qified/rabbitmq";
 
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -19,9 +21,19 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	private _channel: Promise<Channel> | undefined;
 	private readonly _consumerTags = new Map<string, string>();
 	private _uri: string;
+	private _id: string;
 
 	constructor(options: RabbitMqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultRabbitMqUri;
+		this._id = options.id ?? defaultRabbitMqId;
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	/**

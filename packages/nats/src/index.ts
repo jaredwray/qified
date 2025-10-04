@@ -9,18 +9,30 @@ import {
 
 export type NatsMessageProviderOptions = {
 	uri?: string;
+	id?: string;
 };
 
 export const defaultNatsUri = "localhost:4222";
+export const defaultNatsId = "@qified/nats";
 
 export class NatsMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
 	private readonly _subscriptions = new Map<string, Subscription>();
 	private _connection: NatsConnection | undefined;
 	private _uri: string;
+	private _id: string;
 
 	constructor(options: NatsMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultNatsUri;
+		this._id = options.id ?? defaultNatsId;
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public set id(id: string) {
+		this._id = id;
 	}
 
 	/**
