@@ -1,10 +1,23 @@
-import { Hookified, HookifiedOptions } from "hookified";
+import { Hookified, type HookifiedOptions } from "hookified";
 import type {
 	Message,
 	MessageProvider,
 	TaskProvider,
 	TopicHandler,
 } from "./types.js";
+
+/**
+ * Standard events emitted by Qified.
+ */
+export enum QifiedEvents {
+	error = "error",
+	info = "info",
+	warn = "warn",
+	publish = "publish",
+	subscribe = "subscribe",
+	unsubscribe = "unsubscribe",
+	disconnect = "disconnect",
+}
 
 export type QifiedOptions = {
 	/**
@@ -64,7 +77,10 @@ export class Qified extends Hookified {
 	 * @param {string} topic - The topic to publish to.
 	 * @param {Message} message - The message to publish.
 	 */
-	public async publish(topic: string, message: Message): Promise<void> {
+	public async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
 		const promises = this._messageProviders.map(async (provider) =>
 			provider.publish(topic, message),
 		);
@@ -89,11 +105,16 @@ export class Qified extends Hookified {
 	 * This method will call the `disconnect` method on each message provider.
 	 */
 	public async disconnect(): Promise<void> {
-		const promises = this._messageProviders.map(async (provider) =>
-			provider.disconnect(),
-		);
-		await Promise.all(promises);
-		this._messageProviders = [];
+		try {
+			const promises = this._messageProviders.map(async (provider) =>
+				provider.disconnect(),
+			);
+			await Promise.all(promises);
+			this._messageProviders = [];
+			this.emit(QifiedEvents.disconnect);
+		} catch (error) {
+			this.emit(QifiedEvents.error, error);
+		}
 	}
 }
 

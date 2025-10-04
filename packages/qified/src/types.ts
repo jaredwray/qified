@@ -57,7 +57,7 @@ export type MessageProvider = {
 	 * @param message - The message to be published
 	 * @returns {Promise<void>}
 	 */
-	publish(topic: string, message: Message): Promise<void>;
+	publish(topic: string, message: Omit<Message, "providerId">): Promise<void>;
 
 	/**
 	 * Subscribe to a topic / queue. This is used to receive messages from the provider.
