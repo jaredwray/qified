@@ -30,7 +30,11 @@ order: 1
 	await fs.promises.writeFile(readmeSitePath, frontmatter + updatedReadme);
 
 	// Copy each package README to site/docs folder
-	const packages = ['redis', 'rabbitmq', 'nats', 'zeromq'];
+	const packagesDir = path.join(process.cwd(), './packages');
+	const allPackages = await fs.promises.readdir(packagesDir, { withFileTypes: true });
+	const packages = allPackages
+		.filter(dirent => dirent.isDirectory() && dirent.name !== 'qified')
+		.map(dirent => dirent.name);
 	const docsPath = path.join(config.sitePath, 'docs');
 
 	// Create docs directory if it doesn't exist
