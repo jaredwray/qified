@@ -20,6 +20,18 @@ describe("NATSMessageProvider", () => {
 		expect(provider.uri).toBe(uri);
 	});
 
+	test("should get id", () => {
+		const provider = new NatsMessageProvider();
+		expect(provider.id).toBe("@qified/nats");
+	});
+
+	test("should set and get id", () => {
+		const provider = new NatsMessageProvider();
+		const customId = "custom-nats-id";
+		provider.id = customId;
+		expect(provider.id).toBe(customId);
+	});
+
 	test("should publish and receive a message", async () => {
 		const provider = new NatsMessageProvider();
 		const message: Message = { id: "1", data: "test" };
