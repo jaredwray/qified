@@ -33,7 +33,7 @@ pnpm add @qified/zeromq
 import { createQified } from "@qified/zeromq";
 import type { Message } from "qified";
 
-const qified = createQified({ uri: "tcp://localhost:3000" });
+const qified = createQified({ uri: "tcp://localhost:5555" });
 
 await qified.subscribe("example-topic", {
         async handler(message: Message) {
@@ -56,7 +56,7 @@ Configuration options for the ZeroMQ message provider.
 
 ### defaultZmqUri
 
-Default ZeroMQ connection string (`"tcp://localhost:3000"`).
+Default ZeroMQ connection string (`"tcp://localhost:5555"`).
 
 ### ZmqMessageProvider
 
@@ -68,7 +68,7 @@ Creates a new provider.
 
 Options:
 
-- `uri`: ZeroMQ connection URI (defaults to `"tcp://localhost:3000"`).
+- `uri`: ZeroMQ connection URI (defaults to `"tcp://localhost:5555"`).
 
 #### publish(topic: string, message: Message)
 
