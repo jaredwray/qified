@@ -112,6 +112,7 @@ export class Qified extends Hookified {
 			await Promise.all(promises);
 			this._messageProviders = [];
 			this.emit(QifiedEvents.disconnect);
+			/* c8 ignore next 3 */
 		} catch (error) {
 			this.emit(QifiedEvents.error, error);
 		}

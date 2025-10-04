@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: This is a test file and explicit any is acceptable here.
 import { describe, expect, test } from "vitest";
-import { MemoryMessageProvider, Qified } from "../src/index.js";
+import { MemoryMessageProvider, Qified, QifiedEvents } from "../src/index.js";
 import type { Message } from "../src/types.js";
 
 describe("Qified", () => {
@@ -43,6 +43,20 @@ describe("Qified", () => {
 		await qified.disconnect();
 		expect(qified.messageProviders.length).toBe(0);
 		expect(memoryProvider.subscriptions.size).toBe(0);
+	});
+
+	test("should emit disconnect event when disconnect succeeds", async () => {
+		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: [memoryProvider] });
+		let disconnectEmitted = false;
+
+		await qified.on(QifiedEvents.disconnect, async () => {
+			disconnectEmitted = true;
+		});
+
+		await qified.disconnect();
+		expect(disconnectEmitted).toBe(true);
+		expect(qified.messageProviders.length).toBe(0);
 	});
 });
 
