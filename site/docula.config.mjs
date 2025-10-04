@@ -13,6 +13,10 @@ export const options = {
 };
 
 export const onPrepare = async config => {
+	// Ensure docs directory exists
+	const docsPath = path.join(config.sitePath, 'docs');
+	await fs.promises.mkdir(docsPath, { recursive: true });
+
 	// Copy main qified README to docs/index.md
 	const readmePath = path.join(process.cwd(), './packages/qified/README.md');
 	const readmeSitePath = path.join(config.sitePath, 'docs/index.md');
@@ -35,10 +39,6 @@ order: 1
 	const packages = allPackages
 		.filter(dirent => dirent.isDirectory() && dirent.name !== 'qified')
 		.map(dirent => dirent.name);
-	const docsPath = path.join(config.sitePath, 'docs');
-
-	// Create docs directory if it doesn't exist
-	await fs.promises.mkdir(docsPath, { recursive: true });
 
 	for (const pkg of packages) {
 		const pkgReadmePath = path.join(process.cwd(), `./packages/${pkg}/README.md`);
