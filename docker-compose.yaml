@@ -20,3 +20,12 @@ services:
     container_name: nats
     ports:
       - "4222:4222" # NATS port
+
+  zeromq:
+    build:
+      context: ./packages/zeromq
+      dockerfile: Dockerfile
+    container_name: zeromq
+    ports:
+      - "5555:5555" # ZeroMQ frontend (publishers connect here)
+      - "5556:5556" # ZeroMQ backend (subscribers connect here)

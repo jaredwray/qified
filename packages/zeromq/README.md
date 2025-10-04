@@ -33,7 +33,8 @@ pnpm add @qified/zeromq
 import { createQified } from "@qified/zeromq";
 import type { Message } from "qified";
 
-const qified = createQified({ uri: "tcp://localhost:3000" });
+// Standalone mode (default) - peer-to-peer messaging in same process
+const qified = createQified({ uri: "tcp://localhost:5555" });
 
 await qified.subscribe("example-topic", {
         async handler(message: Message) {
@@ -46,6 +47,37 @@ await qified.publish("example-topic", { id: "1", data: "Hello from ZeroMQ!" });
 await qified.disconnect();
 ```
 
+### Usage with External Broker (Multi-Process)
+
+To enable communication between multiple processes or containers, use broker mode with the ZeroMQ proxy:
+
+```ts
+import { createQified } from "@qified/zeromq";
+import type { Message } from "qified";
+
+// Broker mode - connects to external ZeroMQ proxy
+const qified = createQified({
+  uri: "tcp://localhost:5555",
+  mode: "broker"
+});
+
+await qified.subscribe("example-topic", {
+        async handler(message: Message) {
+                console.log(message);
+        },
+});
+
+await qified.publish("example-topic", { id: "1", data: "Hello from ZeroMQ!" });
+
+await qified.disconnect();
+```
+
+Run the broker using Docker:
+
+```bash
+docker-compose up zeromq
+```
+
 ## API
 
 ### ZmqMessageProviderOptions
@@ -53,10 +85,11 @@ await qified.disconnect();
 Configuration options for the ZeroMQ message provider.
 
 - `uri?`: ZeroMQ connection URI. Defaults to [`defaultZmqUri`](#defaultzmquri).
+- `mode?`: Connection mode - `'standalone'` (default) for peer-to-peer or `'broker'` for external proxy.
 
 ### defaultZmqUri
 
-Default ZeroMQ connection string (`"tcp://localhost:3000"`).
+Default ZeroMQ connection string (`"tcp://localhost:5555"`).
 
 ### ZmqMessageProvider
 
@@ -68,7 +101,8 @@ Creates a new provider.
 
 Options:
 
-- `uri`: ZeroMQ connection URI (defaults to `"tcp://localhost:3000"`).
+- `uri`: ZeroMQ connection URI (defaults to `"tcp://localhost:5555"`).
+- `mode`: Connection mode - `'standalone'` or `'broker'` (defaults to `'standalone'`).
 
 #### publish(topic: string, message: Message)
 

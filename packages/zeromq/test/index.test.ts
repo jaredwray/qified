@@ -119,4 +119,48 @@ describe("ZmqMessageProvider", () => {
 		expect(qified.messageProviders.length).toBe(1);
 		expect(qified.messageProviders[0]).toBeInstanceOf(ZmqMessageProvider);
 	});
+
+	test("should create instance in broker mode", () => {
+		const provider = new ZmqMessageProvider({ mode: "broker" });
+		expect(provider).toBeInstanceOf(ZmqMessageProvider);
+		expect(provider.subscriptions.size).toBe(0);
+	});
+
+	test("should publish and receive a message in broker mode", async () => {
+		const provider = new ZmqMessageProvider({ mode: "broker" });
+		const message: Message = { id: "1", data: "test-broker" };
+		let received: Message | undefined;
+		const id = "test-broker-handler";
+
+		await provider.subscribe("broker-topic", {
+			id,
+			async handler(message) {
+				received = message;
+			},
+		});
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 200);
+		});
+
+		await provider.publish("broker-topic", message);
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 200);
+		});
+
+		expect(received).toEqual(message);
+
+		await provider.unsubscribe("broker-topic", id);
+		await provider.disconnect();
+	});
+
+	test("should create Qified instance with broker mode", () => {
+		const qified = createQified({ mode: "broker" });
+		expect(qified).toBeInstanceOf(Qified);
+		expect(qified.messageProviders.length).toBe(1);
+		expect(qified.messageProviders[0]).toBeInstanceOf(ZmqMessageProvider);
+	});
 });

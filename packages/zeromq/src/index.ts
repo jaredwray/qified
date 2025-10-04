@@ -9,9 +9,10 @@ import { Publisher, Subscriber } from "zeromq";
 
 export type ZmqMessageProviderOptions = {
 	uri?: string;
+	mode?: "broker" | "standalone";
 };
 
-export const defaultZmqUri = "tcp://localhost:3000";
+export const defaultZmqUri = "tcp://localhost:5555";
 
 export class ZmqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -19,24 +20,41 @@ export class ZmqMessageProvider implements MessageProvider {
 	private _subscriber: Subscriber | undefined;
 	private _publisher: Publisher | undefined;
 	private _uri: string;
+	private _mode: "broker" | "standalone";
 	private _awaitingMessages: boolean;
 
 	constructor(options: ZmqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultZmqUri;
+		this._mode = options.mode ?? "standalone";
 		this._awaitingMessages = false;
 	}
 
 	private async _createConnection(): Promise<void> {
-		// Publisher `binds` and subscriber `connects`
+		if (this._mode === "broker") {
+			// In broker mode, connect to external proxy
+			// Publisher connects to frontend (port 5555), subscriber to backend (port 5556)
+			if (!this._publisher) {
+				this._publisher = new Publisher();
+				this._publisher.connect(this._uri); // Connect to frontend
+			}
 
-		if (!this._publisher) {
-			this._publisher = new Publisher();
-			await this._publisher.bind(this._uri);
-		}
+			if (!this._subscriber) {
+				this._subscriber = new Subscriber();
+				// Replace port 5555 with 5556 for subscriber
+				const subscriberUri = this._uri.replace(":5555", ":5556");
+				this._subscriber.connect(subscriberUri); // Connect to backend
+			}
+		} else {
+			// In standalone mode, publisher binds and subscriber connects (peer-to-peer)
+			if (!this._publisher) {
+				this._publisher = new Publisher();
+				await this._publisher.bind(this._uri);
+			}
 
-		if (!this._subscriber) {
-			this._subscriber = new Subscriber();
-			this._subscriber.connect(this._uri);
+			if (!this._subscriber) {
+				this._subscriber = new Subscriber();
+				this._subscriber.connect(this._uri);
+			}
 		}
 	}
 

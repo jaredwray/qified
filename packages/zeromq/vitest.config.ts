@@ -10,6 +10,7 @@ export default defineConfig({
 				'dist/**',
 				'test/**',
 				'src/types.ts',
+				'proxy.js'
 			],
 		},
 	},
