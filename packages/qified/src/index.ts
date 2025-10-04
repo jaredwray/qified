@@ -1,3 +1,4 @@
+import { Hookified, HookifiedOptions } from "hookified";
 import type {
 	Message,
 	MessageProvider,
@@ -15,15 +16,16 @@ export type QifiedOptions = {
 	 * The task providers to use.
 	 */
 	taskProviders?: TaskProvider[];
-};
+} & HookifiedOptions;
 
-export class Qified {
+export class Qified extends Hookified {
 	private _messageProviders: MessageProvider[] = [];
 	/**
 	 * Creates an instance of Qified.
 	 * @param {QifiedOptions} options - Optional configuration for Qified.
 	 */
 	constructor(options?: QifiedOptions) {
+		super(options);
 		if (options?.messageProviders) {
 			this._messageProviders = options.messageProviders;
 		}
