@@ -1,6 +1,10 @@
 import { type Message, Qified } from "qified";
 import { describe, expect, test } from "vitest";
-import { createQified, ZmqMessageProvider } from "../src/index.js";
+import {
+	createQified,
+	defaultZmqId,
+	ZmqMessageProvider,
+} from "../src/index.js";
 
 describe("ZmqMessageProvider", () => {
 	test("should create an instance", () => {
@@ -154,6 +158,22 @@ describe("ZmqMessageProvider", () => {
 		expect(received).toEqual({ ...message, providerId: customId });
 
 		await provider.unsubscribe("test-topic", handlerId);
+		await provider.disconnect();
+	});
+
+	test("should get provider id", () => {
+		const provider = new ZmqMessageProvider();
+		expect(provider.id).toBe(defaultZmqId);
+	});
+
+	test("should set provider id", async () => {
+		const customId = "custom-zmq-id";
+		const provider = new ZmqMessageProvider({ id: customId });
+		expect(provider.id).toBe(customId);
+
+		provider.id = "new-id";
+		expect(provider.id).toBe("new-id");
+
 		await provider.disconnect();
 	});
 });
