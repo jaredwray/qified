@@ -18,6 +18,7 @@ Additional packages:
 * [@qified/redis](packages/redis/README.md) - Redis Provider
 * [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
 * [@qified/nats](packages/nats/README.md) - NATS Provider
+* [@qified/zeromq](packages/zeromq/README.md) - ZeroMQ Provider
 
 # Development and Testing
 
