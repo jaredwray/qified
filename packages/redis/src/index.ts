@@ -70,8 +70,15 @@ export class RedisMessageProvider implements MessageProvider {
 	 * @param topic The topic to publish to
 	 * @param message The message to publish
 	 */
-	async publish(topic: string, message: Message): Promise<void> {
-		await this.pub.publish(topic, JSON.stringify(message));
+	async publish(
+		topic: string,
+		message: Omit<Message, "providerId">,
+	): Promise<void> {
+		const messageWithProvider: Message = {
+			...message,
+			providerId: this._id,
+		};
+		await this.pub.publish(topic, JSON.stringify(messageWithProvider));
 	}
 
 	/**
