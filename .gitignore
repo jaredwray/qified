@@ -131,6 +131,7 @@ dist
 
 # site
 site/README.md
+site/docs
 site/.DS_Store
 
 # npm
