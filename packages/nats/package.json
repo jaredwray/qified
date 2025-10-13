@@ -20,7 +20,7 @@
     "test": "pnpm lint && vitest run --coverage",
     "test:ci": "biome check --error-on-warnings && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
-    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean --minify",
+    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
     "build:publish": "pnpm build && pnpm publish --access public --no-git-checks",
     "prepublishOnly": "pnpm build"
   },
