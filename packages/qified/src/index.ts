@@ -23,7 +23,7 @@ export type QifiedOptions = {
 	/**
 	 * The message providers to use.
 	 */
-	messageProviders?: MessageProvider[];
+	messageProviders?: MessageProvider | MessageProvider[];
 
 	/**
 	 * The task providers to use.
@@ -40,7 +40,11 @@ export class Qified extends Hookified {
 	constructor(options?: QifiedOptions) {
 		super(options);
 		if (options?.messageProviders) {
-			this._messageProviders = options.messageProviders;
+			if (Array.isArray(options?.messageProviders)) {
+				this._messageProviders = options.messageProviders;
+			} else {
+				this._messageProviders = [options?.messageProviders];
+			}
 		}
 	}
 

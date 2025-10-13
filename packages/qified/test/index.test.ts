@@ -20,6 +20,13 @@ describe("Qified", () => {
 
 	test("should set message providers via options", () => {
 		const memoryProvider = new MemoryMessageProvider();
+		const qified = new Qified({ messageProviders: memoryProvider });
+		expect(qified.messageProviders).toContain(memoryProvider);
+		expect(qified.messageProviders[0]).toBeInstanceOf(MemoryMessageProvider);
+	});
+
+	test("should set message providers via options as array", () => {
+		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		expect(qified.messageProviders).toContain(memoryProvider);
 		expect(qified.messageProviders[0]).toBeInstanceOf(MemoryMessageProvider);
