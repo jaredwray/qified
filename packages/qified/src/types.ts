@@ -12,7 +12,7 @@ export type Message<T = any> = {
 	/**
 	 * the provider that passed the message
 	 */
-	providerId: string;
+	providerId?: string;
 	/**
 	 * The data of the message
 	 * @type {<T = any>}

@@ -42,7 +42,7 @@ import { Qified, MemoryMessageProvider } from 'qified';
 
 // Create a new Qified instance with a memory provider
 const qified = new Qified({
-  messageProviders: [new MemoryMessageProvider()]
+  messageProviders: new MemoryMessageProvider()
 });
 
 // Subscribe to a topic
@@ -70,7 +70,7 @@ new Qified(options?: QifiedOptions)
 ```
 
 **Options:**
-- `messageProviders?: MessageProvider[]` - Array of message providers to use
+- `messageProviders?: MessageProvider | MessageProvider[]` - a provider or Array of message providers to use
 - `taskProviders?: TaskProvider[]` - Array of task providers to use
 
 **Example:**
@@ -78,7 +78,7 @@ new Qified(options?: QifiedOptions)
 import { Qified, MemoryMessageProvider } from 'qified';
 
 const qified = new Qified({
-  messageProviders: [new MemoryMessageProvider()]
+  messageProviders: new MemoryMessageProvider()
 });
 ```
 
@@ -109,7 +109,7 @@ import { NatsMessageProvider } from '@qified/nats';
 import { RedisMessageProvider } from '@qified/redis';
 
 const qified = new Qified({
-  messageProviders: [new MemoryMessageProvider()]
+  messageProviders: new MemoryMessageProvider()
 });
 
 // Get current providers
@@ -231,7 +231,7 @@ Use the `on()` method to listen to events:
 import { Qified, MemoryMessageProvider, QifiedEvents } from 'qified';
 
 const qified = new Qified({
-  messageProviders: [new MemoryMessageProvider()]
+  messageProviders: new MemoryMessageProvider()
 });
 
 // Listen for publish events
@@ -290,7 +290,7 @@ import { Qified, QifiedEvents } from 'qified';
 import { NatsMessageProvider } from '@qified/nats';
 
 const qified = new Qified({
-  messageProviders: [new NatsMessageProvider()]
+  messageProviders: new NatsMessageProvider()
 });
 
 // Centralized error handler
