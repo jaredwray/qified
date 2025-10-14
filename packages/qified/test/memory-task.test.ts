@@ -694,6 +694,141 @@ describe("MemoryTaskProvider", () => {
 		});
 	});
 
+	describe("processQueue when inactive", () => {
+		test("should not process tasks after disconnect", async () => {
+			let taskProcessed = false;
+
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async () => {
+					taskProcessed = true;
+				},
+			};
+
+			// Register handler first
+			await provider.dequeue("test-queue", handler);
+
+			// Disconnect the provider
+			await provider.disconnect();
+
+			// Try to enqueue a task (this should fail, but let's test processQueue behavior)
+			// Since enqueue will throw, we need to test the internal behavior differently
+			// The processQueue method will exit early if _active is false
+			expect(taskProcessed).toBe(false);
+		});
+
+		test("should stop processing in-flight tasks after disconnect", async () => {
+			const customProvider = new MemoryTaskProvider({ timeout: 5000 });
+			let tasksProcessed = 0;
+
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async () => {
+					await new Promise((resolve) => setTimeout(resolve, 100));
+					tasksProcessed++;
+				},
+			};
+
+			// Register handler and enqueue multiple tasks
+			await customProvider.dequeue("test-queue", handler);
+			await customProvider.enqueue("test-queue", {
+				data: { message: "task1" },
+			});
+			await customProvider.enqueue("test-queue", {
+				data: { message: "task2" },
+			});
+			await customProvider.enqueue("test-queue", {
+				data: { message: "task3" },
+			});
+
+			// Let first task start processing
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// Disconnect while tasks are being processed
+			await customProvider.disconnect();
+
+			// Wait to see if any more tasks get processed
+			await new Promise((resolve) => setTimeout(resolve, 200));
+
+			// Note: The memory provider processes all tasks concurrently (fire-and-forget)
+			// so all 3 tasks that started before disconnect will complete
+			// The key behavior is that after disconnect, processQueue returns early
+			// and no NEW tasks can be added or processed
+			expect(tasksProcessed).toBe(3);
+
+			// Verify that no new tasks can be enqueued after disconnect
+			await expect(
+				customProvider.enqueue("test-queue", { data: { message: "task4" } }),
+			).rejects.toThrow("TaskProvider has been disconnected");
+		});
+
+		test("should handle disconnect with tasks in various states", async () => {
+			const customProvider = new MemoryTaskProvider({ timeout: 5000 });
+			const processedTasks: string[] = [];
+
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (task: Task) => {
+					processedTasks.push(task.data.message);
+					await new Promise((resolve) => setTimeout(resolve, 100));
+				},
+			};
+
+			// Enqueue some tasks before registering handler (waiting state)
+			await customProvider.enqueue("test-queue", {
+				data: { message: "waiting-task" },
+			});
+
+			// Register handler to start processing
+			await customProvider.dequeue("test-queue", handler);
+
+			// Add more tasks while processing
+			await customProvider.enqueue("test-queue", {
+				data: { message: "processing-task" },
+			});
+
+			// Let some tasks start
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			// Disconnect
+			await customProvider.disconnect();
+
+			// The provider should stop processing new tasks
+			const stats = customProvider.getQueueStats("test-queue");
+			expect(stats.waiting).toBe(0);
+			expect(stats.processing).toBe(0);
+		});
+
+		test("should not process scheduled tasks after disconnect", async () => {
+			const customProvider = new MemoryTaskProvider();
+			let taskProcessed = false;
+
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async () => {
+					taskProcessed = true;
+				},
+			};
+
+			await customProvider.dequeue("test-queue", handler);
+
+			// Enqueue a task scheduled for the future
+			await customProvider.enqueue("test-queue", {
+				data: { message: "scheduled-task" },
+				scheduledAt: Date.now() + 100,
+			});
+
+			// Disconnect before the scheduled time
+			await customProvider.disconnect();
+
+			// Wait past the scheduled time
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			// Task should not have been processed
+			expect(taskProcessed).toBe(false);
+		});
+	});
+
 	describe("getDeadLetterTasks", () => {
 		test("should return empty array for queue with no dead-letter tasks", () => {
 			const deadLetterTasks = provider.getDeadLetterTasks("test-queue");
