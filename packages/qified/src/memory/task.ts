@@ -164,7 +164,7 @@ export class MemoryTaskProvider implements TaskProvider {
 			this._queues.set(queue, []);
 		}
 
-		this._queues.get(queue)!.push(queuedTask);
+		this._queues.get(queue)?.push(queuedTask);
 
 		// Process immediately if handlers are registered
 		await this.processQueue(queue);
@@ -188,7 +188,7 @@ export class MemoryTaskProvider implements TaskProvider {
 			this._taskHandlers.set(queue, []);
 		}
 
-		this._taskHandlers.get(queue)!.push(handler);
+		this._taskHandlers.get(queue)?.push(handler);
 
 		// Start processing the queue
 		await this.processQueue(queue);
@@ -261,7 +261,6 @@ export class MemoryTaskProvider implements TaskProvider {
 
 		let acknowledged = false;
 		let rejected = false;
-		let extended = false;
 
 		// Create task context
 		const context: TaskContext = {
@@ -296,7 +295,6 @@ export class MemoryTaskProvider implements TaskProvider {
 				if (acknowledged || rejected) {
 					return;
 				}
-				extended = true;
 				queuedTask.deadlineAt = Date.now() + ttl;
 				if (queuedTask.timeoutHandle) {
 					clearTimeout(queuedTask.timeoutHandle);
@@ -328,7 +326,7 @@ export class MemoryTaskProvider implements TaskProvider {
 			if (!acknowledged && !rejected) {
 				await context.ack();
 			}
-		} catch (error) {
+		} catch (_error) {
 			// Auto-reject on error
 			if (!acknowledged && !rejected) {
 				await context.reject(true);
@@ -367,7 +365,7 @@ export class MemoryTaskProvider implements TaskProvider {
 		if (!this._deadLetterQueue.has(dlqKey)) {
 			this._deadLetterQueue.set(dlqKey, []);
 		}
-		this._deadLetterQueue.get(dlqKey)!.push(task);
+		this._deadLetterQueue.get(dlqKey)?.push(task);
 	}
 
 	/**
