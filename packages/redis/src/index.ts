@@ -36,6 +36,9 @@ export class RedisMessageProvider implements MessageProvider {
 	/** Redis client used for subscribing to messages */
 	private readonly sub: RedisClientType;
 
+	/** Connection promise to ensure connect is only called once */
+	private connectionPromise: Promise<void> | null = null;
+
 	private _id: string;
 
 	/**
@@ -47,8 +50,38 @@ export class RedisMessageProvider implements MessageProvider {
 		this._id = options.id ?? defaultRedisId;
 		this.pub = createClient({ url: uri });
 		this.sub = this.pub.duplicate();
-		void this.pub.connect();
-		void this.sub.connect();
+	}
+
+	/**
+	 * Connects to Redis. Can be called explicitly or will be called automatically on first use.
+	 * @throws Error if connection fails
+	 */
+	async connect(): Promise<void> {
+		if (!this.connectionPromise) {
+			this.connectionPromise = (async () => {
+				await this.pub.connect();
+				await this.sub.connect();
+			})();
+		}
+		return this.connectionPromise;
+	}
+
+	/**
+	 * Returns the connected publish client, connecting if necessary.
+	 * @private
+	 */
+	private async getPubClient(): Promise<RedisClientType> {
+		await this.connect();
+		return this.pub;
+	}
+
+	/**
+	 * Returns the connected subscribe client, connecting if necessary.
+	 * @private
+	 */
+	private async getSubClient(): Promise<RedisClientType> {
+		await this.connect();
+		return this.sub;
 	}
 
 	/**
@@ -78,7 +111,8 @@ export class RedisMessageProvider implements MessageProvider {
 			...message,
 			providerId: this._id,
 		};
-		await this.pub.publish(topic, JSON.stringify(messageWithProvider));
+		const pubClient = await this.getPubClient();
+		await pubClient.publish(topic, JSON.stringify(messageWithProvider));
 	}
 
 	/**
@@ -89,7 +123,8 @@ export class RedisMessageProvider implements MessageProvider {
 	async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
-			await this.sub.subscribe(topic, async (raw) => {
+			const subClient = await this.getSubClient();
+			await subClient.subscribe(topic, async (raw) => {
 				const message = JSON.parse(raw) as Message;
 				const handlers = this.subscriptions.get(topic) ?? [];
 				await Promise.all(handlers.map(async (sub) => sub.handler(message)));
@@ -115,7 +150,8 @@ export class RedisMessageProvider implements MessageProvider {
 			}
 		} else {
 			this.subscriptions.delete(topic);
-			await this.sub.unsubscribe(topic);
+			const subClient = await this.getSubClient();
+			await subClient.unsubscribe(topic);
 		}
 	}
 
@@ -123,14 +159,20 @@ export class RedisMessageProvider implements MessageProvider {
 	 * Disconnects from Redis, unsubscribing from all topics and closing connections.
 	 */
 	async disconnect(): Promise<void> {
-		const topics = [...this.subscriptions.keys()];
-		if (topics.length > 0) {
-			await this.sub.unsubscribe(topics);
-		}
+		// Only disconnect if we've connected
+		if (this.connectionPromise) {
+			await this.connectionPromise;
 
-		this.subscriptions.clear();
-		await this.pub.quit();
-		await this.sub.quit();
+			const topics = [...this.subscriptions.keys()];
+			if (topics.length > 0) {
+				await this.sub.unsubscribe(topics);
+			}
+
+			this.subscriptions.clear();
+			await this.pub.quit();
+			await this.sub.quit();
+			this.connectionPromise = null;
+		}
 	}
 }
 
