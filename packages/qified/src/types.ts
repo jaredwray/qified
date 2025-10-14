@@ -232,6 +232,13 @@ export type TaskProviderOptions = {
 	 * @type {number}
 	 */
 	retries?: number;
+
+	/**
+	 * Name of the dead-letter queue for failed tasks
+	 * If not provided, dead-letter functionality is disabled
+	 * @type {string}
+	 */
+	deadLetterQueue?: string;
 };
 
 /**
@@ -260,6 +267,13 @@ export type TaskProvider = {
 	 * @type {number}
 	 */
 	retries: number;
+
+	/**
+	 * Name of the dead-letter queue for failed tasks
+	 * If not provided, dead-letter functionality is disabled
+	 * @type {string}
+	 */
+	deadLetterQueue?: string;
 
 	/**
 	 * Map of queue names to their registered handlers
