@@ -7,6 +7,13 @@ import {
 } from "../src/index.js";
 
 describe("RedisMessageProvider", () => {
+	test("should fail to connect when Redis is not available", async () => {
+		const provider = new RedisMessageProvider({
+			uri: "redis://localhost:9999",
+		}); // Use non-existent port
+		await expect(provider.connect()).rejects.toThrow();
+	});
+
 	test("should publish and receive a message", async () => {
 		const provider = new RedisMessageProvider();
 		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
@@ -108,7 +115,5 @@ describe("RedisMessageProvider", () => {
 
 		provider.id = "new-id";
 		expect(provider.id).toBe("new-id");
-
-		await provider.disconnect();
 	});
 });
