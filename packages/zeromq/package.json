@@ -1,6 +1,6 @@
 {
   "name": "@qified/zeromq",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "ZeroMQ message provider for qified",
   "type": "module",
   "main": "./dist/index.cjs",
