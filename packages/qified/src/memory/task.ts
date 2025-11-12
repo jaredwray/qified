@@ -199,7 +199,7 @@ export class MemoryTaskProvider implements TaskProvider {
 	 * @param {string} queue - The queue name to process.
 	 */
 	private async processQueue(queue: string): Promise<void> {
-		/* c8 ignore next 3 */
+		/* v8 ignore next -- @preserve */
 		if (!this._active) {
 			return;
 		}
@@ -301,7 +301,7 @@ export class MemoryTaskProvider implements TaskProvider {
 					clearTimeout(queuedTask.timeoutHandle);
 				}
 				// Set a new timeout
-				/* c8 ignore next 4 */
+				/* v8 ignore next -- @preserve */
 				queuedTask.timeoutHandle = setTimeout(() => {
 					if (!acknowledged && !rejected) {
 						void context.reject(true);
