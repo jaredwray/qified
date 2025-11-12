@@ -76,8 +76,8 @@ export class Qified extends Hookified {
 			);
 			await Promise.all(promises);
 			this.emit(QifiedEvents.subscribe, { topic, handler });
-			/* c8 ignore next 3 */
 		} catch (error) {
+			/* v8 ignore next -- @preserve */
 			this.emit(QifiedEvents.error, error);
 		}
 	}
@@ -97,8 +97,8 @@ export class Qified extends Hookified {
 			);
 			await Promise.all(promises);
 			this.emit(QifiedEvents.publish, { topic, message });
-			/* c8 ignore next 3 */
 		} catch (error) {
+			/* v8 ignore next -- @preserve */
 			this.emit(QifiedEvents.error, error);
 		}
 	}
@@ -116,8 +116,8 @@ export class Qified extends Hookified {
 			);
 			await Promise.all(promises);
 			this.emit(QifiedEvents.unsubscribe, { topic, id });
-			/* c8 ignore next 3 */
 		} catch (error) {
+			/* v8 ignore next -- @preserve */
 			this.emit(QifiedEvents.error, error);
 		}
 	}
@@ -134,8 +134,8 @@ export class Qified extends Hookified {
 			await Promise.all(promises);
 			this._messageProviders = [];
 			this.emit(QifiedEvents.disconnect);
-			/* c8 ignore next 3 */
 		} catch (error) {
+			/* v8 ignore next -- @preserve */
 			this.emit(QifiedEvents.error, error);
 		}
 	}
