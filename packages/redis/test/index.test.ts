@@ -116,4 +116,16 @@ describe("RedisMessageProvider", () => {
 		provider.id = "new-id";
 		expect(provider.id).toBe("new-id");
 	});
+
+	test("should force disconnect and destroy connections", async () => {
+		const provider = new RedisMessageProvider();
+		await provider.connect();
+		await provider.subscribe("test-topic", {
+			id: "test-handler",
+			async handler() {},
+		});
+		// Force disconnect should call destroy() instead of close()
+		await provider.disconnect(true);
+		expect(provider.subscriptions.size).toBe(0);
+	});
 });
