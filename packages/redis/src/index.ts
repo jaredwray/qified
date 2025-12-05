@@ -157,8 +157,9 @@ export class RedisMessageProvider implements MessageProvider {
 
 	/**
 	 * Disconnects from Redis, unsubscribing from all topics and closing connections.
+	 * @param force If true, forcefully terminates the connection without sending a quit command. Defaults to false.
 	 */
-	async disconnect(): Promise<void> {
+	async disconnect(force = false): Promise<void> {
 		// Only disconnect if we've connected
 		if (this.connectionPromise) {
 			await this.connectionPromise;
@@ -169,8 +170,25 @@ export class RedisMessageProvider implements MessageProvider {
 			}
 
 			this.subscriptions.clear();
-			await this.pub.quit();
-			await this.sub.quit();
+
+			if (force) {
+				if (this.pub.isOpen) {
+					this.pub.destroy();
+				}
+
+				if (this.sub.isOpen) {
+					this.sub.destroy();
+				}
+			} else {
+				if (this.pub.isOpen) {
+					await this.pub.close();
+				}
+
+				if (this.sub.isOpen) {
+					await this.sub.close();
+				}
+			}
+
 			this.connectionPromise = null;
 		}
 	}
