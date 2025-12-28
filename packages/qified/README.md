@@ -198,7 +198,7 @@ await qified.unsubscribe('user-events', 'userEventHandler');
 await qified.unsubscribe('user-events');
 ```
 
-## disconnect`
+## disconnect
 
 Disconnect from all providers and clean up resources.
 
