@@ -23,7 +23,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",
     "@vitest/coverage-v8": "^4.0.15",
-    "docula": "^0.31.1",
+    "docula": "^0.31.2",
     "tsx": "^4.21.0",
     "vitest": "^4.0.15"
   }
