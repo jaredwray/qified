@@ -1,6 +1,11 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: This is a test file and explicit any is acceptable here.
 import { describe, expect, test } from "vitest";
-import { MemoryMessageProvider, Qified, QifiedEvents } from "../src/index.js";
+import {
+	MemoryMessageProvider,
+	MemoryTaskProvider,
+	Qified,
+	QifiedEvents,
+} from "../src/index.js";
 import type { Message } from "../src/types.js";
 
 describe("Qified", () => {
@@ -64,6 +69,36 @@ describe("Qified", () => {
 		await qified.disconnect();
 		expect(disconnectEmitted).toBe(true);
 		expect(qified.messageProviders.length).toBe(0);
+	});
+
+	test("should access the taskProviders", () => {
+		const qified = new Qified();
+		expect(qified.taskProviders).toEqual([]);
+	});
+
+	test("should set task providers via options", () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: taskProvider });
+		expect(qified.taskProviders).toContain(taskProvider);
+		expect(qified.taskProviders[0]).toBeInstanceOf(MemoryTaskProvider);
+	});
+
+	test("should set task providers via options as array", () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		expect(qified.taskProviders).toContain(taskProvider);
+		expect(qified.taskProviders[0]).toBeInstanceOf(MemoryTaskProvider);
+	});
+
+	test("should set task providers via taskProviders setter", () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		expect(qified.taskProviders).toContain(taskProvider);
+		const providers = qified.taskProviders;
+		providers.push(new MemoryTaskProvider());
+		qified.taskProviders = providers;
+		expect(qified.taskProviders).toEqual(providers);
+		expect(qified.taskProviders.length).toBe(2);
 	});
 });
 

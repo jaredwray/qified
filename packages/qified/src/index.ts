@@ -44,11 +44,12 @@ export type QifiedOptions = {
 	/**
 	 * The task providers to use.
 	 */
-	taskProviders?: TaskProvider[];
+	taskProviders?: TaskProvider | TaskProvider[];
 } & HookifiedOptions;
 
 export class Qified extends Hookified {
 	private _messageProviders: MessageProvider[] = [];
+	private _taskProviders: TaskProvider[] = [];
 	/**
 	 * Creates an instance of Qified.
 	 * @param {QifiedOptions} options - Optional configuration for Qified.
@@ -60,6 +61,14 @@ export class Qified extends Hookified {
 				this._messageProviders = options.messageProviders;
 			} else {
 				this._messageProviders = [options?.messageProviders];
+			}
+		}
+
+		if (options?.taskProviders) {
+			if (Array.isArray(options?.taskProviders)) {
+				this._taskProviders = options.taskProviders;
+			} else {
+				this._taskProviders = [options?.taskProviders];
 			}
 		}
 	}
@@ -78,6 +87,22 @@ export class Qified extends Hookified {
 	 */
 	public set messageProviders(providers: MessageProvider[]) {
 		this._messageProviders = providers;
+	}
+
+	/**
+	 * Gets or sets the task providers.
+	 * @returns {TaskProvider[]} The array of task providers.
+	 */
+	public get taskProviders(): TaskProvider[] {
+		return this._taskProviders;
+	}
+
+	/**
+	 * Sets the task providers.
+	 * @param {TaskProvider[]} providers - The array of task providers to set.
+	 */
+	public set taskProviders(providers: TaskProvider[]) {
+		this._taskProviders = providers;
 	}
 
 	/**
@@ -210,6 +235,7 @@ export class Qified extends Hookified {
 }
 
 export { MemoryMessageProvider } from "./memory/message.js";
+export { MemoryTaskProvider } from "./memory/task.js";
 export type {
 	Message,
 	MessageProvider,
