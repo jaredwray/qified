@@ -30,7 +30,7 @@ interface QueuedTask {
 	attempt: number;
 	deadlineAt: number;
 	processing: boolean;
-	timeoutHandle?: NodeJS.Timeout;
+	timeoutHandle?: ReturnType<typeof setTimeout>;
 }
 
 /**
