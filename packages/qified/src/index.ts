@@ -19,6 +19,22 @@ export enum QifiedEvents {
 	disconnect = "disconnect",
 }
 
+/**
+ * Hook event names for before/after lifecycle hooks.
+ * Before hooks receive a mutable context object that can be modified.
+ * After hooks receive the final context after the operation completes.
+ */
+export enum QifiedHooks {
+	beforeSubscribe = "before:subscribe",
+	afterSubscribe = "after:subscribe",
+	beforePublish = "before:publish",
+	afterPublish = "after:publish",
+	beforeUnsubscribe = "before:unsubscribe",
+	afterUnsubscribe = "after:unsubscribe",
+	beforeDisconnect = "before:disconnect",
+	afterDisconnect = "after:disconnect",
+}
+
 export type QifiedOptions = {
 	/**
 	 * The message providers to use.
