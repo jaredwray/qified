@@ -235,19 +235,19 @@ const qified = new Qified({
 });
 
 // Listen for publish events
-await qified.on(QifiedEvents.publish, async (data) => {
+qified.on(QifiedEvents.publish, async (data) => {
   console.log('Message published to topic:', data.topic);
   console.log('Message:', data.message);
 });
 
 // Listen for subscribe events
-await qified.on(QifiedEvents.subscribe, async (data) => {
+qified.on(QifiedEvents.subscribe, async (data) => {
   console.log('Subscribed to topic:', data.topic);
   console.log('Handler ID:', data.handler.id);
 });
 
 // Listen for unsubscribe events
-await qified.on(QifiedEvents.unsubscribe, async (data) => {
+qified.on(QifiedEvents.unsubscribe, async (data) => {
   console.log('Unsubscribed from topic:', data.topic);
   if (data.id) {
     console.log('Handler ID:', data.id);
@@ -255,12 +255,12 @@ await qified.on(QifiedEvents.unsubscribe, async (data) => {
 });
 
 // Listen for disconnect events
-await qified.on(QifiedEvents.disconnect, async () => {
+qified.on(QifiedEvents.disconnect, async () => {
   console.log('Disconnected from all providers');
 });
 
 // Listen for errors
-await qified.on(QifiedEvents.error, async (error) => {
+qified.on(QifiedEvents.error, async (error) => {
   console.error('Error occurred:', error);
 });
 
@@ -294,7 +294,7 @@ const qified = new Qified({
 });
 
 // Centralized error handler
-await qified.on(QifiedEvents.error, async (error) => {
+qified.on(QifiedEvents.error, async (error) => {
   console.error('Qified error:', error.message);
   // Send to error tracking service
   // Log to file
