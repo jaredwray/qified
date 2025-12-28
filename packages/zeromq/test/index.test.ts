@@ -45,7 +45,7 @@ describe("ZmqMessageProvider", () => {
 	});
 
 	test("should unsubscribe all handlers with no id", async () => {
-		const provider = new ZmqMessageProvider();
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5558" });
 		const message: Message = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
