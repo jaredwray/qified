@@ -237,8 +237,13 @@ export class Qified extends Hookified {
 export { MemoryMessageProvider } from "./memory/message.js";
 export { MemoryTaskProvider } from "./memory/task.js";
 export type {
+	EnqueueTask,
 	Message,
 	MessageProvider,
+	Task,
+	TaskContext,
+	TaskHandler,
 	TaskProvider,
+	TaskProviderOptions,
 	TopicHandler,
 } from "./types.js";

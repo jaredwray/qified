@@ -116,6 +116,9 @@ importers:
 
   packages/redis:
     dependencies:
+      hookified:
+        specifier: ^1.8.0
+        version: 1.15.0
       qified:
         specifier: workspace:^
         version: link:../qified

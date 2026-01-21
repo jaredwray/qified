@@ -6,6 +6,15 @@ import {
 } from "qified";
 import { createClient, type RedisClientType } from "redis";
 
+export {
+	defaultPollInterval,
+	defaultRedisTaskId,
+	defaultRetries as defaultTaskRetries,
+	defaultTimeout as defaultTaskTimeout,
+	RedisTaskProvider,
+	type RedisTaskProviderOptions,
+} from "./task.js";
+
 /**
  * Configuration options for the Redis message provider.
  */
