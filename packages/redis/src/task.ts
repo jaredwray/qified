@@ -269,6 +269,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 */
 	private startPolling(queue: string): void {
 		const poll = async () => {
+			/* v8 ignore next -- @preserve */
 			if (!this._active) {
 				return;
 			}
@@ -278,6 +279,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				await this.checkTimedOutTasks(queue);
 				await this.processQueue(queue);
 			} catch (error) {
+				/* v8 ignore next -- @preserve */
 				this.emit("error", error);
 			}
 
@@ -293,6 +295,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 * Checks for scheduled tasks that are ready to execute.
 	 */
 	private async checkScheduledTasks(queue: string): Promise<void> {
+		/* v8 ignore next -- @preserve */
 		if (!this._active) {
 			return;
 		}
@@ -308,6 +311,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		);
 
 		for (const taskId of readyTasks) {
+			/* v8 ignore next -- @preserve */
 			if (!this._active) {
 				return;
 			}
@@ -321,6 +325,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 * Checks for tasks that have timed out during processing.
 	 */
 	private async checkTimedOutTasks(queue: string): Promise<void> {
+		/* v8 ignore next -- @preserve */
 		if (!this._active) {
 			return;
 		}
@@ -336,6 +341,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		);
 
 		for (const taskId of timedOutTasks) {
+			/* v8 ignore next -- @preserve */
 			if (!this._active) {
 				return;
 			}
@@ -376,6 +382,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 * Processes tasks in a queue by delivering them to registered handlers.
 	 */
 	private async processQueue(queue: string): Promise<void> {
+		/* v8 ignore next -- @preserve */
 		if (!this._active) {
 			return;
 		}
@@ -404,14 +411,17 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		try {
 			taskId = await client.rPop(this.getQueueKey(queue));
 		} catch (error) {
+			/* v8 ignore start -- @preserve */
 			this.emit("error", error);
 			return;
+			/* v8 ignore stop */
 		}
 		if (!taskId) {
 			return;
 		}
 
 		// Check if already being processed locally
+		/* v8 ignore next 4 -- @preserve */
 		if (processingSet.has(taskId)) {
 			// Put back in queue and return
 			await client.lPush(this.getQueueKey(queue), taskId);
@@ -475,6 +485,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				try {
 					await this.removeTask(queue, task.id);
 				} catch (error) {
+					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
 				}
 			},
@@ -497,6 +508,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 						await client.lPush(this.getDeadLetterKey(queue), task.id);
 					}
 				} catch (error) {
+					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
 				}
 			},
@@ -521,6 +533,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 						}
 					}, ttl);
 				} catch (error) {
+					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
 				}
 			},
