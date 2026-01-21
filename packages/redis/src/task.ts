@@ -1,3 +1,4 @@
+import { Hookified } from "hookified";
 import type {
 	EnqueueTask,
 	Task,
@@ -39,8 +40,9 @@ export const defaultPollInterval = 1000;
  * Redis-based task provider for Qified.
  * Uses Redis lists and sorted sets to enable reliable task queue processing
  * across multiple instances with visibility timeout, retries, and dead-letter queues.
+ * Extends Hookified to emit events for errors and other lifecycle events.
  */
-export class RedisTaskProvider implements TaskProvider {
+export class RedisTaskProvider extends Hookified implements TaskProvider {
 	private _id: string;
 	private _timeout: number;
 	private _retries: number;
@@ -58,6 +60,7 @@ export class RedisTaskProvider implements TaskProvider {
 	 * @param options Configuration options for the provider
 	 */
 	constructor(options: RedisTaskProviderOptions = {}) {
+		super();
 		const uri = options.uri ?? defaultRedisUri;
 		this._id = options.id ?? defaultRedisTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
@@ -273,8 +276,8 @@ export class RedisTaskProvider implements TaskProvider {
 				await this.checkScheduledTasks(queue);
 				await this.checkTimedOutTasks(queue);
 				await this.processQueue(queue);
-			} catch {
-				// Ignore errors during polling
+			} catch (error) {
+				this.emit("error", error);
 			}
 
 			if (this._active && this._taskHandlers.has(queue)) {
@@ -399,8 +402,8 @@ export class RedisTaskProvider implements TaskProvider {
 		let taskId: string | null;
 		try {
 			taskId = await client.rPop(this.getQueueKey(queue));
-		} catch {
-			// Client might be closed
+		} catch (error) {
+			this.emit("error", error);
 			return;
 		}
 		if (!taskId) {
@@ -470,8 +473,8 @@ export class RedisTaskProvider implements TaskProvider {
 				acknowledged = true;
 				try {
 					await this.removeTask(queue, task.id);
-				} catch {
-					// Ignore errors if client is closed
+				} catch (error) {
+					this.emit("error", error);
 				}
 			},
 			reject: async (requeue = true) => {
@@ -492,8 +495,8 @@ export class RedisTaskProvider implements TaskProvider {
 						// Move to dead-letter queue
 						await client.lPush(this.getDeadLetterKey(queue), task.id);
 					}
-				} catch {
-					// Ignore errors if client is closed
+				} catch (error) {
+					this.emit("error", error);
 				}
 			},
 			extend: async (ttl: number) => {
@@ -516,8 +519,8 @@ export class RedisTaskProvider implements TaskProvider {
 							void context.reject(true);
 						}
 					}, ttl);
-				} catch {
-					// Ignore errors if client is closed
+				} catch (error) {
+					this.emit("error", error);
 				}
 			},
 			metadata: {
