@@ -196,7 +196,10 @@ describe("RedisTaskProvider", () => {
 
 			expect(taskId).toBeDefined();
 			expect(typeof taskId).toBe("string");
-			expect(taskId).toMatch(/^task-\d+-\d+$/);
+			// UUID format: task-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+			expect(taskId).toMatch(
+				/^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+			);
 		});
 
 		test("should enqueue multiple tasks with unique ids", async () => {

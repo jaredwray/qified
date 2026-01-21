@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Hookified } from "hookified";
 import type {
 	EnqueueTask,
@@ -52,7 +53,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	private _active = true;
 	private _pollInterval: number;
 	private _pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-	private _taskIdCounter = 0;
 	private _processingTasks: Map<string, Set<string>> = new Map();
 
 	/**
@@ -147,10 +147,11 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
-	 * Generates a unique task ID.
+	 * Generates a globally unique task ID using UUID.
+	 * This ensures uniqueness across multiple RedisTaskProvider instances.
 	 */
 	private generateTaskId(): string {
-		return `task-${Date.now()}-${++this._taskIdCounter}`;
+		return `task-${randomUUID()}`;
 	}
 
 	/**
