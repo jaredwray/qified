@@ -11,7 +11,11 @@ import {
 	test,
 	vi,
 } from "vitest";
-import { RabbitMqMessageProvider } from "../src/index.js";
+import {
+	createQified,
+	defaultReconnectTimeInSeconds,
+	RabbitMqMessageProvider,
+} from "../src/index.js";
 
 // Mock amqplib
 vi.mock("amqplib", () => ({
@@ -50,6 +54,69 @@ afterEach(() => {
 });
 
 describe("RabbitMqMessageProvider (mocked connection)", () => {
+	test("should get and set id", () => {
+		const provider = new RabbitMqMessageProvider();
+		expect(provider.id).toBe("@qified/rabbitmq");
+		provider.id = "custom-id";
+		expect(provider.id).toBe("custom-id");
+	});
+
+	test("should get and set uri", () => {
+		const provider = new RabbitMqMessageProvider();
+		expect(provider.uri).toBe("amqp://localhost:5672");
+		provider.uri = "amqp://other:5672";
+		expect(provider.uri).toBe("amqp://other:5672");
+	});
+
+	test("should get and set reconnectTimeInSeconds", () => {
+		const provider = new RabbitMqMessageProvider();
+		expect(provider.reconnectTimeInSeconds).toBe(defaultReconnectTimeInSeconds);
+		provider.reconnectTimeInSeconds = 10;
+		expect(provider.reconnectTimeInSeconds).toBe(10);
+	});
+
+	test("should create Qified instance via createQified", () => {
+		const qified = createQified();
+		expect(qified).toBeInstanceOf(Qified);
+		expect(qified.messageProviders.length).toBe(1);
+		expect(qified.messageProviders[0]).toBeInstanceOf(RabbitMqMessageProvider);
+	});
+
+	test("should reconnect if connection exists but channel is missing", async () => {
+		const channel1 = createMockChannel();
+		const connection1 = createMockConnection(channel1);
+
+		const channel2 = createMockChannel();
+		const connection2 = createMockConnection(channel2);
+
+		mockConnect
+			.mockResolvedValueOnce(connection1)
+			.mockResolvedValueOnce(connection2);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+		await provider.getClient();
+
+		// Verify connection is set
+		const internal = provider as unknown as {
+			_connection: unknown;
+			_channel: unknown;
+		};
+		expect(internal._connection).toBe(connection1);
+
+		// Clear only the channel but keep the connection
+		// This tests the `|| !this._channel` branch on line 128
+		internal._channel = undefined;
+		expect(internal._connection).toBe(connection1);
+
+		const result = await provider.getClient();
+		expect(result).toBe(channel2);
+		expect(mockConnect).toHaveBeenCalledTimes(2);
+
+		await provider.disconnect();
+	});
+
 	test("should connect and return channel from getClient", async () => {
 		const channel = createMockChannel();
 		const connection = createMockConnection(channel);
@@ -59,6 +126,20 @@ describe("RabbitMqMessageProvider (mocked connection)", () => {
 		const result = await provider.getClient();
 		expect(result).toBe(channel);
 		expect(mockConnect).toHaveBeenCalledWith("amqp://localhost:5672");
+
+		await provider.disconnect();
+	});
+
+	test("should return existing channel on second getClient call", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqMessageProvider();
+		const first = await provider.getClient();
+		const second = await provider.getClient();
+		expect(first).toBe(second);
+		expect(mockConnect).toHaveBeenCalledTimes(1);
 
 		await provider.disconnect();
 	});
@@ -162,6 +243,42 @@ describe("RabbitMqMessageProvider (mocked connection)", () => {
 		// biome-ignore lint/style/noNonNullAssertion: set by mock
 		await consumerCallback!(null);
 		expect(received).toHaveLength(1);
+
+		await provider.disconnect();
+	});
+
+	test("should handle message when subscriptions map is cleared", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback: (msg: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (msg: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		const provider = new RabbitMqMessageProvider();
+		await provider.subscribe("my-topic", {
+			id: "h1",
+			handler: async () => {},
+		});
+
+		// Clear subscriptions to simulate the ?? [] fallback path
+		provider.subscriptions.delete("my-topic");
+
+		const fakeMsg = {
+			content: Buffer.from(
+				JSON.stringify({ id: "1", data: "x", providerId: "test" }),
+			),
+		};
+
+		// Should not throw — falls back to empty handlers array
+		// biome-ignore lint/style/noNonNullAssertion: set by mock
+		await consumerCallback!(fakeMsg);
+		expect(channel.ack).toHaveBeenCalledWith(fakeMsg);
 
 		await provider.disconnect();
 	});
@@ -280,6 +397,30 @@ describe("RabbitMqMessageProvider (mocked connection)", () => {
 		expect(connection.close).toHaveBeenCalled();
 		expect(provider.subscriptions.size).toBe(0);
 		expect(provider.consumerTags.size).toBe(0);
+	});
+
+	test("should not schedule reconnect when close fires during disconnect", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		// Make connection.close() emit "close" event (simulates real amqplib behavior)
+		(connection.close as Mock).mockImplementation(async () => {
+			connection.emit("close");
+		});
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 1,
+		});
+		await provider.getClient();
+
+		mockConnect.mockClear();
+		// disconnect sets _closing = true, then calls connection.close()
+		// which emits "close" — the handler should NOT schedule reconnect
+		await provider.disconnect();
+
+		// No reconnection should have been scheduled
+		expect(mockConnect).not.toHaveBeenCalled();
 	});
 
 	test("should clear pending reconnect timer on disconnect", async () => {
@@ -401,6 +542,34 @@ describe("RabbitMqMessageProvider (mocked connection)", () => {
 		await provider.disconnect();
 	});
 
+	test("should not reconnect if closing flag is set when timer fires", async () => {
+		vi.useFakeTimers();
+
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 1,
+		});
+		await provider.getClient();
+
+		// Simulate connection loss — schedules reconnect timer
+		connection.emit("close");
+
+		// Set _closing before the timer fires to simulate the race condition
+		// where disconnect starts between timer scheduling and execution
+		(provider as unknown as { _closing: boolean })._closing = true;
+
+		mockConnect.mockClear();
+		// Advance past reconnect delay — timer fires but _attemptReconnect bails
+		await vi.advanceTimersByTimeAsync(1500);
+		expect(mockConnect).not.toHaveBeenCalled();
+
+		// Reset _closing so cleanup works
+		(provider as unknown as { _closing: boolean })._closing = false;
+	});
+
 	test("should handle connection error event gracefully", async () => {
 		vi.useFakeTimers();
 
@@ -418,9 +587,12 @@ describe("RabbitMqMessageProvider (mocked connection)", () => {
 		});
 		await provider.getClient();
 
-		// Verify that the error handler is registered (won't throw)
+		// Verify that the error handler is registered
 		expect(connection.listenerCount("error")).toBe(1);
 		expect(connection.listenerCount("close")).toBe(1);
+
+		// Emit error event — handler is a no-op but should not throw
+		connection.emit("error", new Error("Socket closed"));
 
 		// Close event triggers reconnection
 		connection.emit("close");
