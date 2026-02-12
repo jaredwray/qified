@@ -80,13 +80,13 @@ await taskProvider.dequeue("my-queue", {
                 console.log("Processing task:", task.data);
 
                 // Access attempt metadata
-                console.log(`Attempt ${ctx.metadata().attempt} of ${ctx.metadata().maxRetries}`);
+                console.log(`Attempt ${ctx.metadata.attempt} of ${ctx.metadata.maxRetries}`);
 
                 // Extend the deadline if needed
-                ctx.extend(10_000);
+                await ctx.extend(10_000);
 
                 // Acknowledge the task on success
-                ctx.ack();
+                await ctx.ack();
         },
 });
 
@@ -174,14 +174,14 @@ Explicitly connects to RabbitMQ. Called automatically on first `enqueue` or `deq
 
 #### enqueue(queue: string, taskData: EnqueueTask)
 
-Enqueues a task to the specified queue. Returns a `Promise<void>`.
+Enqueues a task to the specified queue. Returns a `Promise<string>` with the generated task ID.
 
 Task data options:
 
 - `data`: The task payload (any serializable value).
 - `id?`: Custom task ID. Auto-generated if omitted.
 - `timeout?`: Per-task timeout override in milliseconds.
-- `retries?`: Per-task max retry override.
+- `maxRetries?`: Per-task max retry override.
 - `priority?`: Task priority value.
 
 #### dequeue(queue: string, handler: TaskHandler)
@@ -193,7 +193,7 @@ Registers a handler to process tasks from the specified queue. The handler recei
 - `ack()`: Acknowledge the task (removes it from the queue).
 - `reject(requeue?: boolean)`: Reject the task. If `requeue` is `true` (default), re-enqueues for retry. After max retries, moves to dead-letter queue.
 - `extend(ms: number)`: Extend the processing deadline by the given milliseconds.
-- `metadata()`: Returns `{ attempt, maxRetries }` for the current task.
+- `metadata`: Object with `{ attempt, maxRetries }` for the current task.
 
 #### unsubscribe(queue: string, id?: string)
 
