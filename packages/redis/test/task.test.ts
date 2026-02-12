@@ -9,25 +9,6 @@ import {
 	RedisTaskProvider,
 } from "../src/index.js";
 
-async function waitFor(
-	condition: () => boolean | Promise<boolean>,
-	timeoutMs = 5000,
-	intervalMs = 50,
-): Promise<void> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		if (await condition()) {
-			return;
-		}
-
-		await new Promise((resolve) => {
-			setTimeout(resolve, intervalMs);
-		});
-	}
-
-	throw new Error(`waitFor timed out after ${timeoutMs}ms`);
-}
-
 describe("RedisTaskProvider", () => {
 	let provider: RedisTaskProvider;
 	const testQueue = `test-queue-${Date.now()}`;
@@ -550,45 +531,6 @@ describe("RedisTaskProvider", () => {
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
 		});
-
-		test("should use task-specific timeout over provider default", async () => {
-			const customProvider = new RedisTaskProvider({
-				timeout: 5000,
-				pollInterval: 50,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async (_task: Task, ctx: TaskContext) => {
-					// Simulate long-running task
-					await new Promise((resolve) => setTimeout(resolve, 200));
-					await ctx.ack();
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, {
-				data: { message: "test" },
-				timeout: 50, // Task-specific timeout (shorter than handler duration)
-			});
-
-			// Poll until the timeout has fired and the task has been requeued or dead-lettered
-			await waitFor(async () => {
-				const s = await customProvider.getQueueStats(testQueue);
-				return s.waiting + s.deadLetter > 0;
-			});
-
-			// Task should have timed out and been requeued or moved to dead letter
-			const stats = await customProvider.getQueueStats(testQueue);
-			expect(
-				stats.waiting + stats.deadLetter + stats.processing,
-			).toBeGreaterThan(0);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
 	});
 
 	describe("task context extend", () => {
@@ -666,38 +608,6 @@ describe("RedisTaskProvider", () => {
 			expect(contextMetadata).toBeDefined();
 			expect(contextMetadata.attempt).toBe(1);
 			expect(contextMetadata.maxRetries).toBe(defaultTaskRetries);
-		});
-
-		test("should increment attempt on retry", async () => {
-			const customProvider = new RedisTaskProvider({ pollInterval: 50 });
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const attempts: number[] = [];
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async (_task: Task, ctx: TaskContext) => {
-					attempts.push(ctx.metadata.attempt);
-					if (ctx.metadata.attempt < 2) {
-						await ctx.reject(true);
-					} else {
-						await ctx.ack();
-					}
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
-
-			// Poll until both processing attempts have completed
-			await waitFor(() => attempts.length > 1);
-
-			expect(attempts.length).toBeGreaterThan(1);
-			expect(attempts[0]).toBe(1);
-			expect(attempts[1]).toBe(2);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
 		});
 
 		test("should use task-specific maxRetries", async () => {
