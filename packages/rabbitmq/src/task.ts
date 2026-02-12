@@ -151,22 +151,27 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	async connect(): Promise<void> {
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
-				const connection = await connect(this._uri);
-				this._connection = connection;
-				this._channel = await connection.createChannel();
+				try {
+					const connection = await connect(this._uri);
+					this._connection = connection;
+					this._channel = await connection.createChannel();
 
-				connection.on("error", () => {
-					// Connection error emitted — connection is already closing/closed.
-					// The 'close' handler will trigger reconnection.
-				});
+					connection.on("error", () => {
+						// Connection error emitted — connection is already closing/closed.
+						// The 'close' handler will trigger reconnection.
+					});
 
-				connection.on("close", () => {
-					this._channel = undefined;
-					this._connection = undefined;
-					if (!this._closing) {
-						this._scheduleReconnect();
-					}
-				});
+					connection.on("close", () => {
+						this._channel = undefined;
+						this._connection = undefined;
+						if (!this._closing) {
+							this._scheduleReconnect();
+						}
+					});
+				} catch (error) {
+					this._connectionPromise = null;
+					throw error;
+				}
 			})();
 		}
 

@@ -132,7 +132,12 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	async connect(): Promise<void> {
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
-				await this._client.connect();
+				try {
+					await this._client.connect();
+				} catch (error) {
+					this._connectionPromise = null;
+					throw error;
+				}
 			})();
 		}
 		return this._connectionPromise;
