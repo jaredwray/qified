@@ -210,12 +210,14 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 		// Set _closing before the timer fires
 		(provider as unknown as { _closing: boolean })._closing = true;
 
-		mockConnect.mockClear();
-		await vi.advanceTimersByTimeAsync(1500);
-		expect(mockConnect).not.toHaveBeenCalled();
-
-		// Reset _closing so cleanup works
-		(provider as unknown as { _closing: boolean })._closing = false;
+		try {
+			mockConnect.mockClear();
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(mockConnect).not.toHaveBeenCalled();
+		} finally {
+			// Reset _closing so cleanup works even if assertion fails
+			(provider as unknown as { _closing: boolean })._closing = false;
+		}
 	});
 
 	test("should handle connection error event gracefully", async () => {
