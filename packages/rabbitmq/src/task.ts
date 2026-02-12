@@ -618,10 +618,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		await channel.assertQueue(dlqName, { durable: true });
 
 		const tasks: Task[] = [];
-		// Drain DLQ messages using basic.get, then nack them back so they
-		// remain in the queue for future inspection.
+		const messages: import("amqplib").GetMessage[] = [];
+
+		// Collect all messages without acking — unacked messages are held by
+		// the channel and won't be re-delivered to subsequent get calls.
 		let msg = await channel.get(dlqName, { noAck: false });
 		while (msg) {
+			messages.push(msg);
 			try {
 				const task = JSON.parse(msg.content.toString()) as Task;
 				tasks.push(task);
@@ -629,8 +632,12 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				// Skip malformed messages
 			}
 
-			channel.nack(msg, false, true);
 			msg = await channel.get(dlqName, { noAck: false });
+		}
+
+		// Nack all messages back to the queue so they remain for future inspection
+		for (const m of messages) {
+			channel.nack(m, false, true);
 		}
 
 		return tasks;
