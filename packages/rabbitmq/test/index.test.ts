@@ -340,16 +340,21 @@ describe("RabbitMqMessageProvider", () => {
 		expect(received?.data).toBe("before-disconnect");
 
 		// Force connection close to trigger reconnection
-		received = undefined;
+		received = undefined as Message | undefined;
 		const internal = provider as unknown as {
-			_connection: { close: () => Promise<void> };
+			_connection: { close: () => Promise<void> } | undefined;
+			_channel: unknown;
 		};
-		await internal._connection.close();
+		await internal._connection?.close();
 
-		// Wait for reconnection (1s delay + buffer)
-		await new Promise<void>((resolve) => {
-			setTimeout(resolve, 2500);
-		});
+		// Poll until reconnection completes (channel is re-established)
+		const deadline = Date.now() + 8000;
+		while (!internal._channel && Date.now() < deadline) {
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 100);
+			});
+		}
+		expect(internal._channel).toBeDefined();
 
 		// Verify subscription was re-established
 		await provider.publish(topic, { id: "2", data: "after-reconnect" });
