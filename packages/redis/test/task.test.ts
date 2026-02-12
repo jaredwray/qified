@@ -9,6 +9,23 @@ import {
 	RedisTaskProvider,
 } from "../src/index.js";
 
+async function waitFor(
+	condition: () => boolean | Promise<boolean>,
+	timeoutMs = 5000,
+	intervalMs = 50,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (await condition()) {
+			return;
+		}
+
+		await new Promise((resolve) => {
+			setTimeout(resolve, intervalMs);
+		});
+	}
+}
+
 describe("RedisTaskProvider", () => {
 	let provider: RedisTaskProvider;
 	const testQueue = `test-queue-${Date.now()}`;
@@ -556,8 +573,11 @@ describe("RedisTaskProvider", () => {
 				timeout: 50, // Task-specific timeout (shorter than handler duration)
 			});
 
-			// Wait for timeout to occur
-			await new Promise((resolve) => setTimeout(resolve, 150));
+			// Poll until the timeout has fired and the task has been requeued or dead-lettered
+			await waitFor(async () => {
+				const s = await customProvider.getQueueStats(testQueue);
+				return s.waiting + s.deadLetter > 0;
+			});
 
 			// Task should have timed out and been requeued or moved to dead letter
 			const stats = await customProvider.getQueueStats(testQueue);
@@ -668,7 +688,8 @@ describe("RedisTaskProvider", () => {
 			await customProvider.dequeue(testQueue, handler);
 			await customProvider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 400));
+			// Poll until both processing attempts have completed
+			await waitFor(() => attempts.length > 1);
 
 			expect(attempts.length).toBeGreaterThan(1);
 			expect(attempts[0]).toBe(1);
