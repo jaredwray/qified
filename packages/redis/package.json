@@ -33,13 +33,12 @@
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
-    "hookified": "^1.8.0",
+    "hookified": "^1.15.1",
     "redis": "^5.10.0"
   },
   "peerDependencies": {
     "qified": "workspace:^"
   },
-  "devDependencies": {},
   "files": [
     "dist",
     "LICENSE"
