@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
 	createQified,
 	defaultRabbitMqUri,
+	defaultReconnectTimeInSeconds,
 	RabbitMqMessageProvider,
 } from "../src/index.js";
 
@@ -19,6 +20,32 @@ describe("RabbitMqMessageProvider", () => {
 		const uri = defaultRabbitMqUri;
 		provider.uri = uri;
 		expect(provider.uri).toBe(uri);
+	});
+
+	test("should have default reconnect time", () => {
+		const provider = new RabbitMqMessageProvider();
+		expect(provider.reconnectTimeInSeconds).toBe(defaultReconnectTimeInSeconds);
+		expect(provider.reconnectTimeInSeconds).toBe(5);
+	});
+
+	test("should set custom reconnect time via options", () => {
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 10,
+		});
+		expect(provider.reconnectTimeInSeconds).toBe(10);
+	});
+
+	test("should set and get reconnect time", () => {
+		const provider = new RabbitMqMessageProvider();
+		provider.reconnectTimeInSeconds = 15;
+		expect(provider.reconnectTimeInSeconds).toBe(15);
+	});
+
+	test("should disable reconnection with 0", () => {
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+		expect(provider.reconnectTimeInSeconds).toBe(0);
 	});
 
 	test("should publish and receive a message", async () => {
@@ -148,5 +175,29 @@ describe("RabbitMqMessageProvider", () => {
 
 		await provider.unsubscribe("test-topic", handlerId);
 		await provider.disconnect();
+	});
+
+	test("should not attempt reconnection when disconnect is called", async () => {
+		const provider = new RabbitMqMessageProvider();
+		const message: Message = { id: "1", data: "test" };
+		await provider.subscribe("test-topic", {
+			id: "handler",
+			async handler(_message) {
+				// noop
+			},
+		});
+		await provider.publish("test-topic", message);
+
+		// Disconnect should cleanly close without scheduling reconnection
+		await provider.disconnect();
+		expect(provider.subscriptions.size).toBe(0);
+		expect(provider.consumerTags.size).toBe(0);
+	});
+
+	test("should disconnect cleanly when no connection exists", async () => {
+		const provider = new RabbitMqMessageProvider();
+		// Should not throw when disconnecting without a connection
+		await provider.disconnect();
+		expect(provider.subscriptions.size).toBe(0);
 	});
 });
