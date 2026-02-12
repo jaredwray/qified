@@ -663,7 +663,9 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		let deadLetter = 0;
 		try {
 			const channel = await this.getChannel();
-			const dlqInfo = await channel.assertQueue(`${queue}:dead-letter`, { durable: true });
+			const dlqInfo = await channel.assertQueue(`${queue}:dead-letter`, {
+				durable: true,
+			});
 			deadLetter = dlqInfo.messageCount;
 		} catch {
 			/* v8 ignore next -- @preserve */
