@@ -85,6 +85,9 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	// Track queue -> set of taskIds for cleanup
 	private readonly _queueTaskIds: Map<string, Set<string>> = new Map();
 
+	// Track currently processing tasks: queue -> set of taskIds
+	private readonly _processingTasks: Map<string, Set<string>> = new Map();
+
 	/**
 	 * Creates a new RabbitMQ task provider instance.
 	 * @param options Configuration options for the provider
@@ -338,6 +341,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					return;
 				}
 
+				// Track as processing
+				if (!this._processingTasks.has(queue)) {
+					this._processingTasks.set(queue, new Set());
+				}
+
+				this._processingTasks.get(queue)?.add(task.id);
+
 				// Shared AMQP message state to prevent double ack/nack
 				let amqpHandled = false;
 				const ackAmqp = () => {
@@ -357,6 +367,9 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				for (const handler of handlers) {
 					await this.processTask(queue, task, handler, ackAmqp, nackAmqp);
 				}
+
+				// Remove from processing
+				this._processingTasks.get(queue)?.delete(task.id);
 			},
 			{ noAck: false },
 		);
@@ -670,6 +683,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		this._scheduledTasks.clear();
 		this._attemptCounts.clear();
 		this._queueTaskIds.clear();
+		this._processingTasks.clear();
 
 		// Cancel consumers and close channel/connection
 		if (this._channel) {
@@ -725,7 +739,8 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	 * Gets the current state of a queue.
 	 * Uses assertQueue to safely check queue state without risking channel closure.
 	 * @param queue The queue name
-	 * @returns Queue statistics
+	 * @returns Queue statistics: `waiting` (ready messages in RabbitMQ), `processing` (tasks
+	 *   currently being handled by this provider instance), `deadLetter`, and `scheduled`.
 	 */
 	public async getQueueStats(queue: string): Promise<{
 		waiting: number;
@@ -745,12 +760,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 			// Queue assertion failed
 		}
 
+		const processing = this._processingTasks.get(queue)?.size ?? 0;
 		const deadLetter = this._deadLetterTasks.get(queue)?.length ?? 0;
 		const scheduled = this._scheduledTasks.get(queue)?.length ?? 0;
 
 		return {
 			waiting,
-			processing: 0,
+			processing,
 			deadLetter,
 			scheduled,
 		};
@@ -773,6 +789,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 		this._deadLetterTasks.delete(queue);
 		this._scheduledTasks.delete(queue);
+		this._processingTasks.delete(queue);
 
 		// Clear task data for this queue
 		const taskIds = this._queueTaskIds.get(queue);
