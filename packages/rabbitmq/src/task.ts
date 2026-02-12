@@ -410,13 +410,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 				rejected = true;
 				try {
-					nackAmqp();
-
 					if (requeue && currentAttempt < maxRetries) {
 						await this.publishTask(queue, task);
 					} else {
 						await this.moveToDeadLetter(queue, task);
 					}
+
+					nackAmqp();
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
