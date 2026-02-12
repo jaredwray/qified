@@ -1,6 +1,6 @@
 {
   "name": "@qified/rabbitmq",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "RabbitMQ message provider for qified",
   "type": "module",
   "main": "./dist/index.cjs",
