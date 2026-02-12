@@ -24,6 +24,8 @@ async function waitFor(
 			setTimeout(resolve, intervalMs);
 		});
 	}
+
+	throw new Error(`waitFor timed out after ${timeoutMs}ms`);
 }
 
 describe("RedisTaskProvider", () => {
