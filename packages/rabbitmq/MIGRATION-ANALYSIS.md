@@ -25,9 +25,7 @@ The `RabbitMqMessageProviderOptions` type, `createQified()` helper, `id` getter/
 
 Two public methods expose raw amqplib types directly:
 
-1. **`getClient(): Promise<Channel>`** — currently returns an amqplib `Channel`. With `amqp-connection-manager`, this would return a `ChannelWrapper`, which has a similar but not identical API (e.g., `publish`/`sendToQueue` return Promises instead of booleans).
-
-2. **`getChannel(): Promise<Channel>`** — same issue as `getClient()`.
+1. **`getClient()` and `getChannel()`** — Both methods currently return a `Promise<Channel>`. With `amqp-connection-manager`, the return type would become `Promise<ChannelWrapper>`, which has a similar but not identical API (e.g., `publish`/`sendToQueue` return Promises instead of booleans).
 
 3. **`consumerTags` map** — the current approach of storing consumer tags from `channel.consume()` would need rethinking, since `amqp-connection-manager` uses setup functions that re-run on reconnect, making stored consumer tags unreliable across reconnections.
 
