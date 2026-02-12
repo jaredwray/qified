@@ -1,7 +1,7 @@
 [![logo.svg](https://qified.org/logo.svg)](https://qified.org)
 
 [![tests](https://github.com/jaredwray/qified/actions/workflows/tests.yaml/badge.svg)](https://github.com/jaredwray/qified/actions/workflows/tests.yaml)
-[![GitHub license](https://img.shields.io/github/license/jaredwray/qified)](https://github.com/jaredwray/qified/blob/master/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/jaredwray/qified)](https://github.com/jaredwray/qified/blob/main/LICENSE)
 [![codecov](https://codecov.io/gh/jaredwray/qified/graph/badge.svg?token=jcRdy8SkOG)](https://codecov.io/gh/jaredwray/qified)
 [![npm](https://img.shields.io/npm/dm/qified)](https://npmjs.com/package/qified)
 [![npm](https://img.shields.io/npm/v/qified)](https://npmjs.com/package/qified)
@@ -198,7 +198,7 @@ await qified.unsubscribe('user-events', 'userEventHandler');
 await qified.unsubscribe('user-events');
 ```
 
-## disconnect`
+## disconnect
 
 Disconnect from all providers and clean up resources.
 
@@ -473,10 +473,10 @@ qified.on(QifiedEvents.publish, async (data) => {
 There are multiple providers available to use:
 
 * Memory - this is built into the current `qified` library as `MemoryMessageProvider`.
-* [@qified/redis](packages/redis/README.md) - Redis Provider
-* [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
-* [@qified/nats](packages/nats/README.md) - NATS Provider
-* [@qified/zeromq](packages/zeromq/README.md) - ZeroMQ Provider
+* [@qified/redis](../redis/README.md) - Redis Provider
+* [@qified/rabbitmq](../rabbitmq/README.md) - RabbitMQ Provider
+* [@qified/nats](../nats/README.md) - NATS Provider
+* [@qified/zeromq](../zeromq/README.md) - ZeroMQ Provider
 
 # Development and Testing
 

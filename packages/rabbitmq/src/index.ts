@@ -7,6 +7,14 @@ import {
 	type TopicHandler,
 } from "qified";
 
+export {
+	defaultRabbitMqTaskId,
+	defaultRetries as defaultTaskRetries,
+	defaultTimeout as defaultTaskTimeout,
+	RabbitMqTaskProvider,
+	type RabbitMqTaskProviderOptions,
+} from "./task.js";
+
 /**
  * Configuration options for the RabbitMQ message provider.
  */

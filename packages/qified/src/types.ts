@@ -104,13 +104,6 @@ export type Task<T = any> = {
 	timestamp?: number;
 
 	/**
-	 * Scheduled time for delayed task execution (milliseconds since epoch)
-	 * If set, task won't be processed until this time
-	 * @type {number}
-	 */
-	scheduledAt?: number;
-
-	/**
 	 * Headers for additional metadata
 	 * @type {Record<string, string>}
 	 */

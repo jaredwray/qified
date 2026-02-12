@@ -1,7 +1,7 @@
 [![site/logo.svg](site/logo.svg)](https://qified.org)
 
 [![tests](https://github.com/jaredwray/qified/actions/workflows/tests.yaml/badge.svg)](https://github.com/jaredwray/qified/actions/workflows/tests.yaml)
-[![GitHub license](https://img.shields.io/github/license/jaredwray/qified)](https://github.com/jaredwray/qified/blob/master/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/jaredwray/qified)](https://github.com/jaredwray/qified/blob/main/LICENSE)
 [![codecov](https://codecov.io/gh/jaredwray/qified/graph/badge.svg?token=jcRdy8SkOG)](https://codecov.io/gh/jaredwray/qified)
 [![npm](https://img.shields.io/npm/dm/qified)](https://npmjs.com/package/qified)
 [![npm](https://img.shields.io/npm/v/qified)](https://npmjs.com/package/qified)

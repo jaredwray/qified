@@ -107,7 +107,6 @@ describe("MemoryTaskProvider", () => {
 				priority: 10,
 				maxRetries: 5,
 				timeout: 5000,
-				scheduledAt: Date.now() + 10000,
 			});
 
 			expect(taskId).toBeDefined();
@@ -523,58 +522,6 @@ describe("MemoryTaskProvider", () => {
 		});
 	});
 
-	describe("scheduled tasks", () => {
-		test("should not process task before scheduledAt time", async () => {
-			let processed = false;
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					processed = true;
-				},
-			};
-
-			await provider.dequeue("test-queue", handler);
-			await provider.enqueue("test-queue", {
-				data: { message: "test" },
-				scheduledAt: Date.now() + 1000, // Schedule 1 second in future
-			});
-
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			expect(processed).toBe(false);
-			const stats = provider.getQueueStats("test-queue");
-			expect(stats.waiting).toBe(1);
-		});
-
-		test("should process task after scheduledAt time", async () => {
-			let processed = false;
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					processed = true;
-				},
-			};
-
-			await provider.dequeue("test-queue", handler);
-			await provider.enqueue("test-queue", {
-				data: { message: "test" },
-				scheduledAt: Date.now() + 50, // Schedule 50ms in future
-			});
-
-			// Task should not be processed yet
-			await new Promise((resolve) => setTimeout(resolve, 25));
-			expect(processed).toBe(false);
-
-			// Now enqueue another task to trigger processing of scheduled task
-			await provider.enqueue("test-queue", { data: { message: "trigger" } });
-
-			// Wait for scheduled task to be processed
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			expect(processed).toBe(true);
-		});
-	});
-
 	describe("unsubscribe", () => {
 		test("should unsubscribe specific handler by id", async () => {
 			const handler1: TaskHandler = {
@@ -797,35 +744,6 @@ describe("MemoryTaskProvider", () => {
 			const stats = customProvider.getQueueStats("test-queue");
 			expect(stats.waiting).toBe(0);
 			expect(stats.processing).toBe(0);
-		});
-
-		test("should not process scheduled tasks after disconnect", async () => {
-			const customProvider = new MemoryTaskProvider();
-			let taskProcessed = false;
-
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					taskProcessed = true;
-				},
-			};
-
-			await customProvider.dequeue("test-queue", handler);
-
-			// Enqueue a task scheduled for the future
-			await customProvider.enqueue("test-queue", {
-				data: { message: "scheduled-task" },
-				scheduledAt: Date.now() + 100,
-			});
-
-			// Disconnect before the scheduled time
-			await customProvider.disconnect();
-
-			// Wait past the scheduled time
-			await new Promise((resolve) => setTimeout(resolve, 150));
-
-			// Task should not have been processed
-			expect(taskProcessed).toBe(false);
 		});
 	});
 

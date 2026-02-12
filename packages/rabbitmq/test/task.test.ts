@@ -3,28 +3,65 @@
 import type { Task, TaskContext, TaskHandler } from "qified";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
-	defaultRedisTaskId,
+	defaultRabbitMqTaskId,
 	defaultTaskRetries,
 	defaultTaskTimeout,
-	RedisTaskProvider,
+	RabbitMqTaskProvider,
 } from "../src/index.js";
 
-describe("RedisTaskProvider", () => {
-	let provider: RedisTaskProvider;
-	const testQueue = `test-queue-${Date.now()}`;
+async function waitFor(
+	condition: () => boolean | Promise<boolean>,
+	timeoutMs = 5000,
+	intervalMs = 50,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (await condition()) {
+			return;
+		}
+
+		await new Promise((resolve) => {
+			setTimeout(resolve, intervalMs);
+		});
+	}
+
+	throw new Error(`waitFor timed out after ${timeoutMs}ms`);
+}
+
+let queueCounter = 0;
+function uniqueQueue(): string {
+	queueCounter++;
+	return `test-queue-${Date.now()}-${queueCounter}`;
+}
+
+describe("RabbitMqTaskProvider", () => {
+	let provider: RabbitMqTaskProvider;
+	const testQueue = uniqueQueue();
+
+	// Track custom providers for cleanup
+	const customProviders: RabbitMqTaskProvider[] = [];
+
+	async function createCustomProvider(
+		options: ConstructorParameters<typeof RabbitMqTaskProvider>[0] = {},
+	): Promise<RabbitMqTaskProvider> {
+		const p = new RabbitMqTaskProvider(options);
+		customProviders.push(p);
+		return p;
+	}
 
 	describe("hookified inheritance", () => {
 		test("should extend Hookified and support event emission", () => {
-			const p = new RedisTaskProvider();
+			const p = new RabbitMqTaskProvider();
 			expect(typeof p.on).toBe("function");
 			expect(typeof p.emit).toBe("function");
 			expect(typeof p.off).toBe("function");
 		});
 
-		test("should emit error events when Redis operations fail in ack", async () => {
-			const customProvider = new RedisTaskProvider();
+		test("should emit error events when RabbitMQ operations fail in ack", async () => {
+			const customProvider = await createCustomProvider();
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			const q = uniqueQueue();
+			await customProvider.clearQueue(q);
 
 			const errors: Error[] = [];
 			customProvider.on("error", (error: Error) => {
@@ -38,124 +75,103 @@ describe("RedisTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			// Wait for task to be processed
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await new Promise((resolve) => setTimeout(resolve, 200));
 
 			// Clean up
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 			await customProvider.disconnect();
 
 			// Create a new provider to verify error listener support
-			const p2 = new RedisTaskProvider();
+			const p2 = await createCustomProvider();
 			await p2.connect();
-			await p2.clearQueue(testQueue);
+			await p2.clearQueue(q);
 
 			const errors2: Error[] = [];
 			p2.on("error", (error: Error) => {
 				errors2.push(error);
 			});
 
-			// The error emission is verified by the existence of the listener
 			expect(typeof p2.on).toBe("function");
 
-			await p2.clearQueue(testQueue);
+			await p2.clearQueue(q);
 			await p2.disconnect();
 		});
 
-		test("should emit error events during polling when Redis fails", async () => {
-			const customProvider = new RedisTaskProvider({
-				pollInterval: 50,
-				uri: "redis://localhost:6379",
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const errors: Error[] = [];
-			customProvider.on("error", (error: Error) => {
-				errors.push(error);
-			});
-
-			// Register a handler to start polling
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {},
-			});
-
-			// Wait for polling to run
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			// Clean up - no errors should have occurred in normal operation
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-
-			// Verify error listener was registered (proves hookified works)
-			expect(typeof customProvider.on).toBe("function");
-		});
-
 		test("should support onHook and removeHook from Hookified", () => {
-			const p = new RedisTaskProvider();
+			const p = new RabbitMqTaskProvider();
 			expect(typeof p.onHook).toBe("function");
 			expect(typeof p.removeHook).toBe("function");
 		});
 
 		test("should support once method from Hookified", () => {
-			const p = new RedisTaskProvider();
+			const p = new RabbitMqTaskProvider();
 			expect(typeof p.once).toBe("function");
 		});
 	});
 
 	beforeEach(async () => {
-		provider = new RedisTaskProvider();
+		provider = new RabbitMqTaskProvider();
 		await provider.connect();
 		await provider.clearQueue(testQueue);
 	});
 
 	afterEach(async () => {
+		// Clean up custom providers first
+		for (const p of customProviders) {
+			try {
+				await p.disconnect(true);
+			} catch {
+				/* ignore */
+			}
+		}
+
+		customProviders.length = 0;
+
 		await provider.clearQueue(testQueue);
 		await provider.disconnect();
 	});
 
 	describe("constructor and initialization", () => {
 		test("should initialize with default values", () => {
-			const p = new RedisTaskProvider();
-			expect(p.id).toBe(defaultRedisTaskId);
+			const p = new RabbitMqTaskProvider();
+			expect(p.id).toBe(defaultRabbitMqTaskId);
 			expect(p.timeout).toBe(defaultTaskTimeout);
 			expect(p.retries).toBe(defaultTaskRetries);
 			expect(p.taskHandlers).toEqual(new Map());
 		});
 
 		test("should initialize with custom id", () => {
-			const customProvider = new RedisTaskProvider({ id: "custom-id" });
-			expect(customProvider.id).toBe("custom-id");
+			const p = new RabbitMqTaskProvider({ id: "custom-id" });
+			expect(p.id).toBe("custom-id");
 		});
 
 		test("should initialize with custom timeout", () => {
-			const customProvider = new RedisTaskProvider({ timeout: 5000 });
-			expect(customProvider.timeout).toBe(5000);
+			const p = new RabbitMqTaskProvider({ timeout: 5000 });
+			expect(p.timeout).toBe(5000);
 		});
 
 		test("should initialize with custom retries", () => {
-			const customProvider = new RedisTaskProvider({ retries: 5 });
-			expect(customProvider.retries).toBe(5);
+			const p = new RabbitMqTaskProvider({ retries: 5 });
+			expect(p.retries).toBe(5);
 		});
 
 		test("should initialize with all custom options", () => {
-			const customProvider = new RedisTaskProvider({
+			const p = new RabbitMqTaskProvider({
 				id: "custom-id",
 				timeout: 5000,
 				retries: 5,
-				pollInterval: 500,
 			});
-			expect(customProvider.id).toBe("custom-id");
-			expect(customProvider.timeout).toBe(5000);
-			expect(customProvider.retries).toBe(5);
+			expect(p.id).toBe("custom-id");
+			expect(p.timeout).toBe(5000);
+			expect(p.retries).toBe(5);
 		});
 
-		test("should fail to connect when Redis is not available", async () => {
-			const p = new RedisTaskProvider({ uri: "redis://localhost:9999" });
+		test("should fail to connect when RabbitMQ is not available", async () => {
+			const p = new RabbitMqTaskProvider({ uri: "amqp://localhost:9999" });
 			await expect(p.connect()).rejects.toThrow();
 		});
 	});
@@ -196,7 +212,6 @@ describe("RedisTaskProvider", () => {
 
 			expect(taskId).toBeDefined();
 			expect(typeof taskId).toBe("string");
-			// UUID format: task-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 			expect(taskId).toMatch(
 				/^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
 			);
@@ -278,8 +293,7 @@ describe("RedisTaskProvider", () => {
 				data: { message: "test" },
 			});
 
-			// Wait a bit for async processing
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => processedTask !== undefined);
 
 			expect(processedTask).toBeDefined();
 			expect(processedTask?.id).toBe(taskId);
@@ -287,22 +301,21 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should auto-acknowledge task when handler completes successfully", async () => {
+			let processed = false;
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {
-					// Handler completes without error
+					processed = true;
 				},
 			};
 
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			// Wait for processing
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => processed);
 
 			const stats = await provider.getQueueStats(testQueue);
 			expect(stats.waiting).toBe(0);
-			expect(stats.processing).toBe(0);
 		});
 
 		test("should throw error when disconnected", async () => {
@@ -328,12 +341,11 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => context !== undefined);
 
 			expect(context).toBeDefined();
 			const stats = await provider.getQueueStats(testQueue);
 			expect(stats.waiting).toBe(0);
-			expect(stats.processing).toBe(0);
 		});
 
 		test("should not acknowledge twice", async () => {
@@ -351,7 +363,7 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => ackCount >= 2);
 
 			expect(ackCount).toBe(2);
 			const stats = await provider.getQueueStats(testQueue);
@@ -361,9 +373,10 @@ describe("RedisTaskProvider", () => {
 
 	describe("task rejection and retry", () => {
 		test("should reject and requeue task on failure", async () => {
-			const customProvider = new RedisTaskProvider({ pollInterval: 100 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
 			const handler: TaskHandler = {
@@ -371,71 +384,71 @@ describe("RedisTaskProvider", () => {
 				handler: async (_task: Task, ctx: TaskContext) => {
 					attemptCount++;
 					if (attemptCount === 1) {
-						await ctx.reject(true); // Requeue
+						await ctx.reject(true);
 					} else {
 						await ctx.ack();
 					}
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			// Wait for retry processing
-			await new Promise((resolve) => setTimeout(resolve, 500));
+			await waitFor(() => attemptCount > 1);
 
 			expect(attemptCount).toBeGreaterThan(1);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should move to dead-letter queue after max retries", async () => {
-			const customProvider = new RedisTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				retries: 2,
-				pollInterval: 100,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
-
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async (_task: Task, ctx: TaskContext) => {
 					attemptCount++;
-					await ctx.reject(true); // Always reject
+					await ctx.reject(true);
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			// Wait for all retries
-			await new Promise((resolve) => setTimeout(resolve, 800));
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length === 1;
+			});
 
-			const deadLetterTasks =
-				await customProvider.getDeadLetterTasks(testQueue);
+			const deadLetterTasks = await customProvider.getDeadLetterTasks(q);
 			expect(deadLetterTasks.length).toBe(1);
 			expect(deadLetterTasks[0].data).toEqual({ message: "test" });
 			expect(attemptCount).toBe(2);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should move to dead-letter queue when reject with requeue=false", async () => {
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async (_task: Task, ctx: TaskContext) => {
-					await ctx.reject(false); // Don't requeue
+					await ctx.reject(false);
 				},
 			};
 
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(async () => {
+				const dlq = await provider.getDeadLetterTasks(testQueue);
+				return dlq.length === 1;
+			});
 
 			const deadLetterTasks = await provider.getDeadLetterTasks(testQueue);
 			expect(deadLetterTasks.length).toBe(1);
@@ -456,7 +469,7 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => rejectCount >= 2);
 
 			expect(rejectCount).toBe(2);
 			const deadLetterTasks = await provider.getDeadLetterTasks(testQueue);
@@ -464,12 +477,12 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should auto-reject task on handler error", async () => {
-			const customProvider = new RedisTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				retries: 3,
-				pollInterval: 100,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
 			const handler: TaskHandler = {
@@ -480,67 +493,105 @@ describe("RedisTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			// Wait for retries
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length === 1;
+			});
 
 			expect(attemptCount).toBe(3);
-			const deadLetterTasks =
-				await customProvider.getDeadLetterTasks(testQueue);
+			const deadLetterTasks = await customProvider.getDeadLetterTasks(q);
 			expect(deadLetterTasks.length).toBe(1);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 	});
 
 	describe("task timeout", () => {
 		test("should timeout task after configured timeout", async () => {
-			const customProvider = new RedisTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 100,
-				pollInterval: 50,
+				retries: 1,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
-			let taskTimedOut = false;
-
+			let handlerCalled = false;
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {
+					handlerCalled = true;
 					// Simulate long-running task
-					await new Promise((resolve) => setTimeout(resolve, 300));
-					taskTimedOut = false; // Should not reach here
+					await new Promise((resolve) => setTimeout(resolve, 500));
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			// Wait for the task to be processed and eventually end up in DLQ
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length > 0;
+			}, 10_000);
 
-			// Task should have timed out and be requeued
-			const stats = await customProvider.getQueueStats(testQueue);
-			// After timeout, task gets rejected and requeued
-			taskTimedOut =
-				stats.waiting > 0 || stats.deadLetter > 0 || stats.processing > 0;
-			expect(taskTimedOut).toBe(true);
+			expect(handlerCalled).toBe(true);
+			const dlq = await customProvider.getDeadLetterTasks(q);
+			expect(dlq.length).toBeGreaterThan(0);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
+		});
+
+		test("should use task-specific timeout over provider default", async () => {
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
+				timeout: 5000,
+				retries: 1,
+			});
+			await customProvider.connect();
+			await customProvider.clearQueue(q);
+
+			let handlerCalled = false;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async () => {
+					handlerCalled = true;
+					// Simulate long-running task
+					await new Promise((resolve) => setTimeout(resolve, 500));
+				},
+			};
+
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, {
+				data: { message: "test" },
+				timeout: 50, // Task-specific timeout (shorter than handler duration)
+			});
+
+			// Wait for the task to end up in DLQ after retries exhaust
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length > 0;
+			}, 10_000);
+
+			expect(handlerCalled).toBe(true);
+			const dlq = await customProvider.getDeadLetterTasks(q);
+			expect(dlq.length).toBeGreaterThan(0);
+
+			await customProvider.clearQueue(q);
 		});
 	});
 
 	describe("task context extend", () => {
 		test("should extend task deadline", async () => {
-			const customProvider = new RedisTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 200,
-				pollInterval: 50,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let completed = false;
 
@@ -555,18 +606,16 @@ describe("RedisTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 500));
+			await waitFor(() => completed);
 
 			expect(completed).toBe(true);
-			const stats = await customProvider.getQueueStats(testQueue);
+			const stats = await customProvider.getQueueStats(q);
 			expect(stats.waiting).toBe(0);
-			expect(stats.processing).toBe(0);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should not extend after acknowledgment", async () => {
@@ -583,7 +632,7 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => extendCalled);
 
 			expect(extendCalled).toBe(true);
 		});
@@ -603,11 +652,42 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => contextMetadata !== undefined);
 
 			expect(contextMetadata).toBeDefined();
 			expect(contextMetadata.attempt).toBe(1);
 			expect(contextMetadata.maxRetries).toBe(defaultTaskRetries);
+		});
+
+		test("should increment attempt on retry", async () => {
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({});
+			await customProvider.connect();
+			await customProvider.clearQueue(q);
+
+			const attempts: number[] = [];
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					attempts.push(ctx.metadata.attempt);
+					if (ctx.metadata.attempt < 2) {
+						await ctx.reject(true);
+					} else {
+						await ctx.ack();
+					}
+				},
+			};
+
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
+
+			await waitFor(() => attempts.length > 1);
+
+			expect(attempts.length).toBeGreaterThan(1);
+			expect(attempts[0]).toBe(1);
+			expect(attempts[1]).toBe(2);
+
+			await customProvider.clearQueue(q);
 		});
 
 		test("should use task-specific maxRetries", async () => {
@@ -626,7 +706,7 @@ describe("RedisTaskProvider", () => {
 				maxRetries: 10,
 			});
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => contextMetadata !== undefined);
 
 			expect(contextMetadata.maxRetries).toBe(10);
 		});
@@ -726,17 +806,18 @@ describe("RedisTaskProvider", () => {
 			).rejects.toThrow("TaskProvider has been disconnected");
 		});
 
-		test("should force disconnect and destroy connections", async () => {
-			const p = new RedisTaskProvider();
+		test("should force disconnect", async () => {
+			const p = await createCustomProvider();
 			await p.connect();
 
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {},
 			};
-			await p.dequeue(testQueue, handler);
+			const q = uniqueQueue();
+			await p.dequeue(q, handler);
 
-			// Force disconnect should call destroy() instead of close()
+			// Force disconnect should skip graceful close
 			await p.disconnect(true);
 			expect(p.taskHandlers.size).toBe(0);
 		});
@@ -760,7 +841,10 @@ describe("RedisTaskProvider", () => {
 			await provider.enqueue(testQueue, { data: { message: "test1" } });
 			await provider.enqueue(testQueue, { data: { message: "test2" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			await waitFor(async () => {
+				const dlq = await provider.getDeadLetterTasks(testQueue);
+				return dlq.length === 2;
+			});
 
 			const deadLetterTasks = await provider.getDeadLetterTasks(testQueue);
 			expect(deadLetterTasks.length).toBe(2);
@@ -778,13 +862,20 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should return correct stats for queue with waiting tasks", async () => {
-			await provider.enqueue(testQueue, { data: { message: "test1" } });
-			await provider.enqueue(testQueue, { data: { message: "test2" } });
+			// Use a fresh queue with no consumer so messages stay as "ready"
+			const q = uniqueQueue();
+			await provider.enqueue(q, { data: { message: "test1" } });
+			await provider.enqueue(q, { data: { message: "test2" } });
 
-			const stats = await provider.getQueueStats(testQueue);
+			// Small delay for RabbitMQ to process
+			await new Promise((resolve) => setTimeout(resolve, 50));
+
+			const stats = await provider.getQueueStats(q);
 			expect(stats.waiting).toBe(2);
 			expect(stats.processing).toBe(0);
 			expect(stats.deadLetter).toBe(0);
+
+			await provider.clearQueue(q);
 		});
 
 		test("should return correct stats with dead-letter tasks", async () => {
@@ -799,7 +890,10 @@ describe("RedisTaskProvider", () => {
 			await provider.enqueue(testQueue, { data: { message: "test1" } });
 			await provider.enqueue(testQueue, { data: { message: "test2" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			await waitFor(async () => {
+				const dlq = await provider.getDeadLetterTasks(testQueue);
+				return dlq.length === 2;
+			});
 
 			const stats = await provider.getQueueStats(testQueue);
 			expect(stats.waiting).toBe(0);
@@ -830,7 +924,7 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler2);
 			await provider.enqueue(testQueue, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			await waitFor(() => handler1Called && handler2Called);
 
 			expect(handler1Called).toBe(true);
 			expect(handler2Called).toBe(true);
@@ -839,8 +933,8 @@ describe("RedisTaskProvider", () => {
 
 	describe("multiple queues", () => {
 		test("should maintain separate queues", async () => {
-			const queue1 = `${testQueue}-1`;
-			const queue2 = `${testQueue}-2`;
+			const queue1 = uniqueQueue();
+			const queue2 = uniqueQueue();
 
 			let queue1Processed = false;
 			let queue2Processed = false;
@@ -864,7 +958,7 @@ describe("RedisTaskProvider", () => {
 			await provider.enqueue(queue1, { data: { message: "test1" } });
 			await provider.enqueue(queue2, { data: { message: "test2" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
+			await waitFor(() => queue1Processed && queue2Processed);
 
 			expect(queue1Processed).toBe(true);
 			expect(queue2Processed).toBe(true);
@@ -899,7 +993,7 @@ describe("RedisTaskProvider", () => {
 				priority: 5,
 			});
 
-			await new Promise((resolve) => setTimeout(resolve, 100));
+			await waitFor(() => receivedTask !== undefined);
 
 			expect(receivedTask).toBeDefined();
 			expect(receivedTask?.data).toEqual({
@@ -927,11 +1021,10 @@ describe("RedisTaskProvider", () => {
 			await provider.dequeue(testQueue, handler);
 			await provider.enqueue(testQueue, { data: { message: "test3" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
-
-			// Verify data exists
-			const statsBefore = await provider.getQueueStats(testQueue);
-			expect(statsBefore.waiting + statsBefore.deadLetter).toBeGreaterThan(0);
+			await waitFor(async () => {
+				const dlq = await provider.getDeadLetterTasks(testQueue);
+				return dlq.length > 0;
+			});
 
 			// Clear queue
 			await provider.clearQueue(testQueue);
@@ -939,89 +1032,45 @@ describe("RedisTaskProvider", () => {
 			// Verify data is cleared
 			const statsAfter = await provider.getQueueStats(testQueue);
 			expect(statsAfter.waiting).toBe(0);
-			expect(statsAfter.processing).toBe(0);
 			expect(statsAfter.deadLetter).toBe(0);
 		});
 	});
 
-	describe("edge cases and coverage", () => {
-		test("should handle timed out tasks via background polling", async () => {
-			// This test covers checkTimedOutTasks (lines 335-366)
-			const customProvider = new RedisTaskProvider({
-				timeout: 50,
-				retries: 2,
-				pollInterval: 30,
-			});
+	describe("edge cases", () => {
+		test("should handle disconnect during task processing", async () => {
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {
-					// Simulate long task that will timeout
+					// Long operation
 					await new Promise((resolve) => setTimeout(resolve, 200));
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			// Wait for timeout detection via polling and retries
-			await new Promise((resolve) => setTimeout(resolve, 600));
-
-			// Task should have been retried and eventually moved to DLQ
-			const stats = await customProvider.getQueueStats(testQueue);
-			expect(
-				stats.deadLetter + stats.waiting + stats.processing,
-			).toBeGreaterThanOrEqual(0);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should handle disconnect during timed out task processing", async () => {
-			// This test covers early return in checkTimedOutTasks (lines 321, 335)
-			const customProvider = new RedisTaskProvider({
-				timeout: 20,
-				pollInterval: 30,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					// Long task that will timeout
-					await new Promise((resolve) => setTimeout(resolve, 500));
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-
-			// Enqueue multiple tasks
-			for (let i = 0; i < 3; i++) {
-				await customProvider.enqueue(testQueue, {
-					data: { message: `task-${i}` },
-				});
-			}
-
-			// Wait for tasks to start processing and timeout
+			// Wait just enough for processing to start
 			await new Promise((resolve) => setTimeout(resolve, 50));
 
-			// Disconnect while timeout handling is in progress
+			// Disconnect while potentially in the middle of processing
 			await customProvider.disconnect();
 
-			// Should not throw
+			// Should handle gracefully
 			expect(customProvider.taskHandlers.size).toBe(0);
 		});
 
 		test("should handle polling loop exit when inactive", async () => {
-			// This test covers line 269 (early return in poll when _active is false)
-			const customProvider = new RedisTaskProvider({ pollInterval: 20 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
-			await customProvider.dequeue(testQueue, {
+			await customProvider.dequeue(q, {
 				id: "test-handler",
 				handler: async () => {},
 			});
@@ -1039,43 +1088,14 @@ describe("RedisTaskProvider", () => {
 			expect(customProvider.taskHandlers.size).toBe(0);
 		});
 
-		test("should handle task data missing during processing", async () => {
-			// This test covers line 421 (task data missing, skip)
-			const customProvider = new RedisTaskProvider({ pollInterval: 50 });
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			// Manually add a task ID to the queue without task data
-			const client = (customProvider as any)._client;
-			await client.lPush(`${testQueue}:tasks`, "orphan-task-id");
-
-			let handlerCalled = false;
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {
-					handlerCalled = true;
-				},
-			});
-
-			// Wait for processing attempt
-			await new Promise((resolve) => setTimeout(resolve, 150));
-
-			// Handler should not have been called for orphan task
-			// But it shouldn't crash either
-			expect(handlerCalled).toBe(false);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
 		test("should handle extended timeout expiration triggering reject", async () => {
-			// This test covers lines 515-516 (extended timeout firing)
-			const customProvider = new RedisTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 5000,
-				pollInterval: 50,
+				retries: 1,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let extendCalled = false;
 			const handler: TaskHandler = {
@@ -1085,256 +1105,23 @@ describe("RedisTaskProvider", () => {
 					await ctx.extend(50);
 					extendCalled = true;
 					// Wait longer than the extended timeout
-					await new Promise((resolve) => setTimeout(resolve, 150));
+					await new Promise((resolve) => setTimeout(resolve, 200));
 					// Task should have been auto-rejected by now via the extended timeout
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			// Wait for processing and extended timeout to fire
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			// Wait for processing and extended timeout to eventually move to DLQ
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return extendCalled && dlq.length > 0;
+			}, 10_000);
 
 			expect(extendCalled).toBe(true);
 
-			// The task should have been rejected (requeued or in DLQ)
-			const stats = await customProvider.getQueueStats(testQueue);
-			expect(
-				stats.waiting + stats.deadLetter + stats.processing,
-			).toBeGreaterThanOrEqual(0);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should handle processQueue when _active becomes false after getClient", async () => {
-			// This test covers line 376 (early return after getClient when _active is false)
-			const customProvider = new RedisTaskProvider({ pollInterval: 30 });
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					// Long operation
-					await new Promise((resolve) => setTimeout(resolve, 200));
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
-
-			// Wait just enough for processing to potentially start
-			await new Promise((resolve) => setTimeout(resolve, 20));
-
-			// Disconnect while potentially in the middle of processQueue
-			await customProvider.disconnect();
-
-			// Should handle gracefully
-			expect(customProvider.taskHandlers.size).toBe(0);
-		});
-
-		test("should move timed out task to DLQ when max retries exceeded", async () => {
-			// This test specifically covers lines 364-366 (move to DLQ in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
-				timeout: 30,
-				retries: 1,
-				pollInterval: 20,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					// Always timeout by taking too long
-					await new Promise((resolve) => setTimeout(resolve, 200));
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
-
-			// Wait for timeout detection, retry, and eventual DLQ
-			await new Promise((resolve) => setTimeout(resolve, 400));
-
-			// Task should eventually end up in dead letter queue
-			const stats = await customProvider.getQueueStats(testQueue);
-			// Either it's in DLQ, still processing, or waiting for retry
-			expect(
-				stats.deadLetter + stats.processing + stats.waiting,
-			).toBeGreaterThanOrEqual(0);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should handle missing task data in checkTimedOutTasks", async () => {
-			// This test covers lines 346-349 (task data missing cleanup in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
-				timeout: 30,
-				pollInterval: 20,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			// Manually add a task ID to processing set without task data
-			const client = (customProvider as any)._client;
-			const processingKey = `${testQueue}:processing`;
-			await client.zAdd(processingKey, {
-				score: Date.now() - 100,
-				value: "orphan-processing-task",
-			});
-
-			// Register handler to start polling
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {},
-			});
-
-			// Wait for checkTimedOutTasks to run and clean up orphan
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			// The orphan task should have been cleaned up from processing set
-			const processingCount = await client.zCard(processingKey);
-			expect(processingCount).toBe(0);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should requeue timed out task when retries remaining via polling", async () => {
-			// This test covers lines 361-363 (requeue for retry in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
-				timeout: 30,
-				retries: 5,
-				pollInterval: 20,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			let attemptCount = 0;
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async (_task: Task, ctx: TaskContext) => {
-					attemptCount++;
-					if (attemptCount < 3) {
-						// First two attempts: let it timeout
-						await new Promise((resolve) => setTimeout(resolve, 200));
-					} else {
-						// Third attempt: complete successfully
-						await ctx.ack();
-					}
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
-
-			// Wait for timeouts and retries via polling
-			await new Promise((resolve) => setTimeout(resolve, 500));
-
-			// Task should have been processed successfully after retries
-			expect(attemptCount).toBeGreaterThanOrEqual(1);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should move timed out task to DLQ via checkTimedOutTasks when retries exhausted", async () => {
-			// This test specifically targets line 366 (DLQ move in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
-				timeout: 20,
-				retries: 1, // Only 1 retry allowed
-				pollInterval: 15,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			// Manually set up a task in processing state that has already exhausted retries
-			const client = (customProvider as any)._client;
-			const taskId = "exhausted-task";
-			const taskData = {
-				id: taskId,
-				data: { message: "test" },
-				timestamp: Date.now(),
-			};
-
-			// Store task data
-			await client.set(`${testQueue}:task:${taskId}`, JSON.stringify(taskData));
-			// Set attempt count to max retries (already tried once)
-			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
-			// Add to processing with expired deadline
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() - 1000, // Already expired
-				value: taskId,
-			});
-
-			// Register handler to start polling (which will run checkTimedOutTasks)
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {},
-			});
-
-			// Wait for checkTimedOutTasks to process the expired task
-			await new Promise((resolve) => setTimeout(resolve, 100));
-
-			// Task should have been moved to DLQ
-			const dlqTasks = await customProvider.getDeadLetterTasks(testQueue);
-			expect(dlqTasks.length).toBe(1);
-			expect(dlqTasks[0].id).toBe(taskId);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-
-		test("should requeue timed out task via checkTimedOutTasks when retries remaining", async () => {
-			// This test specifically targets lines 361-363 (requeue in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
-				timeout: 20,
-				retries: 5,
-				pollInterval: 15,
-			});
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			// Manually set up a task in processing state that still has retries
-			const client = (customProvider as any)._client;
-			const taskId = "retry-task";
-			const taskData = {
-				id: taskId,
-				data: { message: "test" },
-				timestamp: Date.now(),
-			};
-
-			// Store task data
-			await client.set(`${testQueue}:task:${taskId}`, JSON.stringify(taskData));
-			// Set attempt count to less than max retries
-			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
-			// Add to processing with expired deadline
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() - 1000, // Already expired
-				value: taskId,
-			});
-
-			// Register handler to start polling
-			let handlerCalled = false;
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {
-					handlerCalled = true;
-				},
-			});
-
-			// Wait for checkTimedOutTasks to requeue and then process
-			await new Promise((resolve) => setTimeout(resolve, 150));
-
-			// Task should have been requeued and processed
-			expect(handlerCalled).toBe(true);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 	});
 });
