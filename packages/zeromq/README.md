@@ -9,7 +9,7 @@ This package implements a message provider backed by ZeroMQ using queues for pub
 - [Installation](#installation)
 - [Usage with Qified](#usage-with-qified)
 - [API](#api)
-  - [ZmqMessageProviderOptions](#ZmqMessageProviderOptions)
+  - [ZmqMessageProviderOptions](#zmqmessageprovideroptions)
   - [defaultZmqUri](#defaultzmquri)
   - [ZmqMessageProvider](#zmqmessageprovider)
     - [constructor](#constructor)
