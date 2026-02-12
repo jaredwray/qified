@@ -298,6 +298,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		}
 
 		this._reconnecting = true;
+		let failed = false;
 		try {
 			await this._connect();
 
@@ -310,12 +311,16 @@ export class RabbitMqMessageProvider implements MessageProvider {
 				await this._setupConsumer(channel, topic);
 			}
 		} catch {
-			// Reconnection failed — try again
+			// Reconnection failed — will retry after resetting state
 			this._channel = undefined;
 			this._connection = undefined;
-			this._scheduleReconnect();
+			failed = true;
 		} finally {
 			this._reconnecting = false;
+		}
+
+		if (failed) {
+			this._scheduleReconnect();
 		}
 	}
 
