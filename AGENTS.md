@@ -24,8 +24,8 @@ Qified is a task and message queue library with multiple providers, built with T
 
 ## Development Rules
 
-1. **Always run `pnpm test` before committing** - All tests must pass
-2. **Maintain 100% code coverage** - Add tests for any new code
+1. **Always run `pnpm test` after every change** - You must test your changes every time, no exceptions. All tests must pass before committing.
+2. **Maintain 100% code coverage** - Add tests for any new code. Every change must achieve 100% coverage. If coverage drops below 100%, add or update tests until it is restored.
 3. **Follow existing code style** - Biome enforces formatting and linting
 
 ## Structure
