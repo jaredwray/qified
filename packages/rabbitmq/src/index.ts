@@ -21,22 +21,35 @@ export type RabbitMqMessageProviderOptions = {
 	 * @default "@qified/rabbitmq"
 	 */
 	id?: string;
+	/**
+	 * Time in seconds to wait before attempting to reconnect after a connection loss.
+	 * Set to 0 to disable automatic reconnection.
+	 * @default 5
+	 */
+	reconnectTimeInSeconds?: number;
 };
 
 export const defaultRabbitMqUri = "amqp://localhost:5672";
 export const defaultRabbitMqId = "@qified/rabbitmq";
+export const defaultReconnectTimeInSeconds = 5;
 
 /**
  * RabbitMQ message provider for qified.
  * Provides pub/sub messaging using RabbitMQ as the message broker.
+ * Includes automatic connection recovery — on connection loss, the provider
+ * will reconnect and re-establish all active subscriptions.
  */
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
-	private _connection: Promise<ChannelModel> | undefined;
-	private _channel: Promise<Channel> | undefined;
+	private _connection: ChannelModel | undefined;
+	private _channel: Channel | undefined;
 	private readonly _consumerTags = new Map<string, string>();
 	private _uri: string;
 	private _id: string;
+	private _reconnectTimeInSeconds: number;
+	private _reconnecting = false;
+	private _closing = false;
+	private _reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
 	/**
 	 * Creates an instance of RabbitMqMessageProvider.
@@ -45,6 +58,8 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	constructor(options: RabbitMqMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultRabbitMqUri;
 		this._id = options.id ?? defaultRabbitMqId;
+		this._reconnectTimeInSeconds =
+			options.reconnectTimeInSeconds ?? defaultReconnectTimeInSeconds;
 	}
 
 	/**
@@ -82,6 +97,22 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	}
 
 	/**
+	 * Gets the reconnect time in seconds.
+	 * @returns {number} The reconnect time in seconds. 0 means reconnection is disabled.
+	 */
+	public get reconnectTimeInSeconds(): number {
+		return this._reconnectTimeInSeconds;
+	}
+
+	/**
+	 * Sets the reconnect time in seconds.
+	 * @param {number} value The reconnect time in seconds. Set to 0 to disable.
+	 */
+	public set reconnectTimeInSeconds(value: number) {
+		this._reconnectTimeInSeconds = value;
+	}
+
+	/**
 	 * Gets the consumer tags for the RabbitMQ subscriptions.
 	 * @returns {Map<string, string>} A map of topic names to consumer tags.
 	 */
@@ -94,11 +125,12 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 * @returns {Promise<Channel>} A promise that resolves to the RabbitMQ channel.
 	 */
 	public async getClient(): Promise<Channel> {
-		this._connection ??= connect(this._uri);
-		this._channel ??= this._connection.then(async (conn) =>
-			conn.createChannel(),
-		);
-		return this._channel;
+		if (!this._connection || !this._channel) {
+			await this._connect();
+		}
+
+		// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the channel is created before use
+		return this._channel!;
 	}
 
 	/**
@@ -147,16 +179,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		const channel = await this.getChannel();
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
-			await channel.assertQueue(topic);
-			const { consumerTag } = await channel.consume(topic, async (message_) => {
-				if (message_) {
-					const message = JSON.parse(message_.content.toString()) as Message;
-					const handlers = this.subscriptions.get(topic) ?? [];
-					await Promise.all(handlers.map(async (sub) => sub.handler(message)));
-					channel.ack(message_);
-				}
-			});
-			this._consumerTags.set(topic, consumerTag);
+			await this._setupConsumer(channel, topic);
 		}
 
 		this.subscriptions.get(topic)?.push(handler);
@@ -197,16 +220,122 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the disconnection is complete.
 	 */
 	public async disconnect(): Promise<void> {
-		const channel = await this.getChannel();
-		for (const tag of this._consumerTags.values()) {
-			await channel.cancel(tag);
+		this._closing = true;
+
+		if (this._reconnectTimer) {
+			clearTimeout(this._reconnectTimer);
+			this._reconnectTimer = undefined;
 		}
 
-		this._consumerTags.clear();
-		this.subscriptions.clear();
-		await channel.close();
-		this._channel = undefined;
-		this._connection = undefined;
+		if (this._channel) {
+			const channel = this._channel;
+			for (const tag of this._consumerTags.values()) {
+				await channel.cancel(tag);
+			}
+
+			this._consumerTags.clear();
+			this.subscriptions.clear();
+			await channel.close();
+			this._channel = undefined;
+		}
+
+		if (this._connection) {
+			await this._connection.close();
+			this._connection = undefined;
+		}
+
+		this._closing = false;
+	}
+
+	/**
+	 * Establishes a connection to RabbitMQ and creates a channel.
+	 * Attaches error and close listeners for automatic reconnection.
+	 */
+	private async _connect(): Promise<void> {
+		const connection = await connect(this._uri);
+		this._connection = connection;
+		this._channel = await connection.createChannel();
+
+		connection.on("error", () => {
+			// Connection error emitted — connection is already closing/closed.
+			// The 'close' handler will trigger reconnection.
+		});
+
+		connection.on("close", () => {
+			this._channel = undefined;
+			this._connection = undefined;
+			if (!this._closing) {
+				this._scheduleReconnect();
+			}
+		});
+	}
+
+	/**
+	 * Schedules a reconnection attempt after the configured delay.
+	 * Skips if reconnection is disabled or already in progress.
+	 */
+	private _scheduleReconnect(): void {
+		if (
+			this._reconnectTimeInSeconds <= 0 ||
+			this._reconnecting ||
+			this._closing
+		) {
+			return;
+		}
+
+		this._reconnectTimer = setTimeout(async () => {
+			this._reconnectTimer = undefined;
+			await this._attemptReconnect();
+		}, this._reconnectTimeInSeconds * 1000);
+	}
+
+	/**
+	 * Attempts to reconnect to RabbitMQ and re-establish all active subscriptions.
+	 */
+	private async _attemptReconnect(): Promise<void> {
+		if (this._reconnecting || this._closing) {
+			return;
+		}
+
+		this._reconnecting = true;
+		try {
+			await this._connect();
+
+			// biome-ignore lint/style/noNonNullAssertion: channel is set by _connect
+			const channel = this._channel!;
+
+			// Re-establish all active consumers
+			const topics = [...this.subscriptions.keys()];
+			for (const topic of topics) {
+				await this._setupConsumer(channel, topic);
+			}
+		} catch {
+			// Reconnection failed — try again
+			this._channel = undefined;
+			this._connection = undefined;
+			this._scheduleReconnect();
+		} finally {
+			this._reconnecting = false;
+		}
+	}
+
+	/**
+	 * Sets up a consumer for a topic on the given channel.
+	 * Asserts the queue and registers a message consumer that dispatches to all handlers.
+	 * @param {Channel} channel The channel to set up the consumer on.
+	 * @param {string} topic The topic to consume from.
+	 */
+	private async _setupConsumer(channel: Channel, topic: string): Promise<void> {
+		await channel.assertQueue(topic);
+		const { consumerTag } = await channel.consume(topic, async (message_) => {
+			if (message_) {
+				const message = JSON.parse(message_.content.toString()) as Message;
+				const handlers = this.subscriptions.get(topic) ?? [];
+				await Promise.all(handlers.map(async (sub) => sub.handler(message)));
+				channel.ack(message_);
+			}
+		});
+		this._consumerTags.set(topic, consumerTag);
 	}
 }
 
