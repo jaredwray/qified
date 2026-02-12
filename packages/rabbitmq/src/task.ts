@@ -1,11 +1,6 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import {
-	type Channel,
-	type ChannelModel,
-	type ConsumeMessage,
-	connect,
-} from "amqplib";
+import { type Channel, type ChannelModel, connect } from "amqplib";
 import { Hookified } from "hookified";
 import type {
 	EnqueueTask,
@@ -78,7 +73,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	// In-memory tracking for attempt counts: taskId -> count
 	private readonly _attemptCounts: Map<string, number> = new Map();
 
-	// Scheduled tasks: queue -> ScheduledEntry[]
+	// Scheduled tasks: queue -> entries
 	private readonly _scheduledTasks: Map<
 		string,
 		Array<{ task: Task; scheduledAt: number }>
@@ -343,8 +338,24 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					return;
 				}
 
+				// Shared AMQP message state to prevent double ack/nack
+				let amqpHandled = false;
+				const ackAmqp = () => {
+					if (!amqpHandled) {
+						amqpHandled = true;
+						channel.ack(message_);
+					}
+				};
+
+				const nackAmqp = () => {
+					if (!amqpHandled) {
+						amqpHandled = true;
+						channel.nack(message_, false, false);
+					}
+				};
+
 				for (const handler of handlers) {
-					await this.processTask(queue, task, message_, handler);
+					await this.processTask(queue, task, handler, ackAmqp, nackAmqp);
 				}
 			},
 			{ noAck: false },
@@ -359,8 +370,9 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	private async processTask(
 		queue: string,
 		task: Task,
-		amqpMessage: ConsumeMessage,
 		handler: TaskHandler,
+		ackAmqp: () => void,
+		nackAmqp: () => void,
 	): Promise<void> {
 		const maxRetries = task.maxRetries ?? this._retries;
 		const timeout = task.timeout ?? this._timeout;
@@ -373,8 +385,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		let rejected = false;
 		let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
-		const channel = await this.getChannel();
-
 		const context: TaskContext = {
 			ack: async () => {
 				if (acknowledged || rejected || !this._active) {
@@ -383,7 +393,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 				acknowledged = true;
 				try {
-					channel.ack(amqpMessage);
+					ackAmqp();
 					this.cleanupTask(queue, task.id);
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
@@ -397,7 +407,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 				rejected = true;
 				try {
-					channel.nack(amqpMessage, false, false);
+					nackAmqp();
 
 					if (requeue && currentAttempt < maxRetries) {
 						await this.publishTask(queue, task);
@@ -713,6 +723,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 	/**
 	 * Gets the current state of a queue.
+	 * Uses assertQueue to safely check queue state without risking channel closure.
 	 * @param queue The queue name
 	 * @returns Queue statistics
 	 */
@@ -725,10 +736,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		let waiting = 0;
 		try {
 			const channel = await this.getChannel();
-			const queueInfo = await channel.checkQueue(queue);
+			// Use assertQueue (idempotent) instead of checkQueue to avoid
+			// channel closure when queue doesn't exist
+			const queueInfo = await channel.assertQueue(queue, { durable: true });
 			waiting = queueInfo.messageCount;
 		} catch {
-			// Queue may not exist yet
+			/* v8 ignore next -- @preserve */
+			// Queue assertion failed
 		}
 
 		const deadLetter = this._deadLetterTasks.get(queue)?.length ?? 0;
@@ -744,21 +758,18 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 	/**
 	 * Clears all data for a queue. Useful for testing.
+	 * Uses assertQueue before purgeQueue to avoid channel closure on non-existent queues.
 	 * @param queue The queue name to clear
 	 */
 	public async clearQueue(queue: string): Promise<void> {
 		const channel = await this.getChannel();
-		try {
-			await channel.purgeQueue(queue);
-		} catch {
-			/* queue may not exist */
-		}
 
-		try {
-			await channel.purgeQueue(`${queue}:dead-letter`);
-		} catch {
-			/* queue may not exist */
-		}
+		// Assert queues first to ensure they exist (prevents channel error on purge)
+		await channel.assertQueue(queue, { durable: true });
+		await channel.purgeQueue(queue);
+
+		await channel.assertQueue(`${queue}:dead-letter`, { durable: true });
+		await channel.purgeQueue(`${queue}:dead-letter`);
 
 		this._deadLetterTasks.delete(queue);
 		this._scheduledTasks.delete(queue);

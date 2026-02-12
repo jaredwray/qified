@@ -28,9 +28,26 @@ async function waitFor(
 	throw new Error(`waitFor timed out after ${timeoutMs}ms`);
 }
 
+let queueCounter = 0;
+function uniqueQueue(): string {
+	queueCounter++;
+	return `test-queue-${Date.now()}-${queueCounter}`;
+}
+
 describe("RabbitMqTaskProvider", () => {
 	let provider: RabbitMqTaskProvider;
-	const testQueue = `test-queue-${Date.now()}`;
+	const testQueue = uniqueQueue();
+
+	// Track custom providers for cleanup
+	const customProviders: RabbitMqTaskProvider[] = [];
+
+	async function createCustomProvider(
+		options: ConstructorParameters<typeof RabbitMqTaskProvider>[0] = {},
+	): Promise<RabbitMqTaskProvider> {
+		const p = new RabbitMqTaskProvider(options);
+		customProviders.push(p);
+		return p;
+	}
 
 	describe("hookified inheritance", () => {
 		test("should extend Hookified and support event emission", () => {
@@ -41,9 +58,10 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should emit error events when RabbitMQ operations fail in ack", async () => {
-			const customProvider = new RabbitMqTaskProvider();
+			const customProvider = await createCustomProvider();
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			const q = uniqueQueue();
+			await customProvider.clearQueue(q);
 
 			const errors: Error[] = [];
 			customProvider.on("error", (error: Error) => {
@@ -57,20 +75,20 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			// Wait for task to be processed
 			await new Promise((resolve) => setTimeout(resolve, 200));
 
 			// Clean up
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 			await customProvider.disconnect();
 
 			// Create a new provider to verify error listener support
-			const p2 = new RabbitMqTaskProvider();
+			const p2 = await createCustomProvider();
 			await p2.connect();
-			await p2.clearQueue(testQueue);
+			await p2.clearQueue(q);
 
 			const errors2: Error[] = [];
 			p2.on("error", (error: Error) => {
@@ -79,7 +97,7 @@ describe("RabbitMqTaskProvider", () => {
 
 			expect(typeof p2.on).toBe("function");
 
-			await p2.clearQueue(testQueue);
+			await p2.clearQueue(q);
 			await p2.disconnect();
 		});
 
@@ -102,6 +120,17 @@ describe("RabbitMqTaskProvider", () => {
 	});
 
 	afterEach(async () => {
+		// Clean up custom providers first
+		for (const p of customProviders) {
+			try {
+				await p.disconnect(true);
+			} catch {
+				/* ignore */
+			}
+		}
+
+		customProviders.length = 0;
+
 		await provider.clearQueue(testQueue);
 		await provider.disconnect();
 	});
@@ -116,30 +145,30 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should initialize with custom id", () => {
-			const customProvider = new RabbitMqTaskProvider({ id: "custom-id" });
-			expect(customProvider.id).toBe("custom-id");
+			const p = new RabbitMqTaskProvider({ id: "custom-id" });
+			expect(p.id).toBe("custom-id");
 		});
 
 		test("should initialize with custom timeout", () => {
-			const customProvider = new RabbitMqTaskProvider({ timeout: 5000 });
-			expect(customProvider.timeout).toBe(5000);
+			const p = new RabbitMqTaskProvider({ timeout: 5000 });
+			expect(p.timeout).toBe(5000);
 		});
 
 		test("should initialize with custom retries", () => {
-			const customProvider = new RabbitMqTaskProvider({ retries: 5 });
-			expect(customProvider.retries).toBe(5);
+			const p = new RabbitMqTaskProvider({ retries: 5 });
+			expect(p.retries).toBe(5);
 		});
 
 		test("should initialize with all custom options", () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const p = new RabbitMqTaskProvider({
 				id: "custom-id",
 				timeout: 5000,
 				retries: 5,
 				pollInterval: 500,
 			});
-			expect(customProvider.id).toBe("custom-id");
-			expect(customProvider.timeout).toBe(5000);
-			expect(customProvider.retries).toBe(5);
+			expect(p.id).toBe("custom-id");
+			expect(p.timeout).toBe(5000);
+			expect(p.retries).toBe(5);
 		});
 
 		test("should fail to connect when RabbitMQ is not available", async () => {
@@ -184,7 +213,6 @@ describe("RabbitMqTaskProvider", () => {
 
 			expect(taskId).toBeDefined();
 			expect(typeof taskId).toBe("string");
-			// UUID format: task-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 			expect(taskId).toMatch(
 				/^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
 			);
@@ -347,9 +375,10 @@ describe("RabbitMqTaskProvider", () => {
 
 	describe("task rejection and retry", () => {
 		test("should reject and requeue task on failure", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 100 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 100 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
 			const handler: TaskHandler = {
@@ -357,65 +386,62 @@ describe("RabbitMqTaskProvider", () => {
 				handler: async (_task: Task, ctx: TaskContext) => {
 					attemptCount++;
 					if (attemptCount === 1) {
-						await ctx.reject(true); // Requeue
+						await ctx.reject(true);
 					} else {
 						await ctx.ack();
 					}
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			await waitFor(() => attemptCount > 1);
 
 			expect(attemptCount).toBeGreaterThan(1);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should move to dead-letter queue after max retries", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				retries: 2,
 				pollInterval: 100,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
-
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async (_task: Task, ctx: TaskContext) => {
 					attemptCount++;
-					await ctx.reject(true); // Always reject
+					await ctx.reject(true);
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			await waitFor(async () => {
-				const dlq = await customProvider.getDeadLetterTasks(testQueue);
+				const dlq = await customProvider.getDeadLetterTasks(q);
 				return dlq.length === 1;
 			});
 
-			const deadLetterTasks =
-				await customProvider.getDeadLetterTasks(testQueue);
+			const deadLetterTasks = await customProvider.getDeadLetterTasks(q);
 			expect(deadLetterTasks.length).toBe(1);
 			expect(deadLetterTasks[0].data).toEqual({ message: "test" });
 			expect(attemptCount).toBe(2);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should move to dead-letter queue when reject with requeue=false", async () => {
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async (_task: Task, ctx: TaskContext) => {
-					await ctx.reject(false); // Don't requeue
+					await ctx.reject(false);
 				},
 			};
 
@@ -454,12 +480,13 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should auto-reject task on handler error", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				retries: 3,
 				pollInterval: 100,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let attemptCount = 0;
 			const handler: TaskHandler = {
@@ -470,102 +497,108 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			await waitFor(async () => {
-				const dlq = await customProvider.getDeadLetterTasks(testQueue);
+				const dlq = await customProvider.getDeadLetterTasks(q);
 				return dlq.length === 1;
 			});
 
 			expect(attemptCount).toBe(3);
-			const deadLetterTasks =
-				await customProvider.getDeadLetterTasks(testQueue);
+			const deadLetterTasks = await customProvider.getDeadLetterTasks(q);
 			expect(deadLetterTasks.length).toBe(1);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 	});
 
 	describe("task timeout", () => {
 		test("should timeout task after configured timeout", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 100,
+				retries: 1,
 				pollInterval: 50,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
+			let handlerCalled = false;
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {
+					handlerCalled = true;
 					// Simulate long-running task
 					await new Promise((resolve) => setTimeout(resolve, 500));
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			// Wait for the task to be processed and eventually end up in DLQ
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length > 0;
+			}, 10_000);
 
-			// Task should have timed out and be requeued or in DLQ
-			const stats = await customProvider.getQueueStats(testQueue);
-			const dlq = await customProvider.getDeadLetterTasks(testQueue);
-			const taskTimedOut = stats.waiting > 0 || dlq.length > 0;
-			expect(taskTimedOut).toBe(true);
+			expect(handlerCalled).toBe(true);
+			const dlq = await customProvider.getDeadLetterTasks(q);
+			expect(dlq.length).toBeGreaterThan(0);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should use task-specific timeout over provider default", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 5000,
+				retries: 1,
 				pollInterval: 50,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
+			let handlerCalled = false;
 			const handler: TaskHandler = {
 				id: "test-handler",
-				handler: async (_task: Task, ctx: TaskContext) => {
+				handler: async () => {
+					handlerCalled = true;
 					// Simulate long-running task
-					await new Promise((resolve) => setTimeout(resolve, 200));
-					await ctx.ack();
+					await new Promise((resolve) => setTimeout(resolve, 500));
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, {
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, {
 				data: { message: "test" },
 				timeout: 50, // Task-specific timeout (shorter than handler duration)
 			});
 
+			// Wait for the task to end up in DLQ after retries exhaust
 			await waitFor(async () => {
-				const s = await customProvider.getQueueStats(testQueue);
-				const dlq = await customProvider.getDeadLetterTasks(testQueue);
-				return s.waiting + dlq.length > 0;
-			});
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return dlq.length > 0;
+			}, 10_000);
 
-			const stats = await customProvider.getQueueStats(testQueue);
-			const dlq = await customProvider.getDeadLetterTasks(testQueue);
-			expect(stats.waiting + dlq.length).toBeGreaterThan(0);
+			expect(handlerCalled).toBe(true);
+			const dlq = await customProvider.getDeadLetterTasks(q);
+			expect(dlq.length).toBeGreaterThan(0);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 	});
 
 	describe("task context extend", () => {
 		test("should extend task deadline", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 200,
 				pollInterval: 50,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let completed = false;
 
@@ -580,17 +613,16 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			await waitFor(() => completed);
 
 			expect(completed).toBe(true);
-			const stats = await customProvider.getQueueStats(testQueue);
+			const stats = await customProvider.getQueueStats(q);
 			expect(stats.waiting).toBe(0);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should not extend after acknowledgment", async () => {
@@ -635,9 +667,10 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should increment attempt on retry", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 50 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 50 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			const attempts: number[] = [];
 			const handler: TaskHandler = {
@@ -652,8 +685,8 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			await waitFor(() => attempts.length > 1);
 
@@ -661,8 +694,7 @@ describe("RabbitMqTaskProvider", () => {
 			expect(attempts[0]).toBe(1);
 			expect(attempts[1]).toBe(2);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should use task-specific maxRetries", async () => {
@@ -711,9 +743,10 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should process task after scheduledAt time via polling", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 50 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 50 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let processed = false;
 			const handler: TaskHandler = {
@@ -723,8 +756,8 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, {
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, {
 				data: { message: "test" },
 				scheduledAt: Date.now() + 100, // Schedule 100ms in future
 			});
@@ -738,8 +771,7 @@ describe("RabbitMqTaskProvider", () => {
 
 			expect(processed).toBe(true);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 	});
 
@@ -838,14 +870,15 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should force disconnect", async () => {
-			const p = new RabbitMqTaskProvider();
+			const p = await createCustomProvider();
 			await p.connect();
 
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async () => {},
 			};
-			await p.dequeue(testQueue, handler);
+			const q = uniqueQueue();
+			await p.dequeue(q, handler);
 
 			// Force disconnect should skip graceful close
 			await p.disconnect(true);
@@ -893,16 +926,20 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should return correct stats for queue with waiting tasks", async () => {
-			await provider.enqueue(testQueue, { data: { message: "test1" } });
-			await provider.enqueue(testQueue, { data: { message: "test2" } });
+			// Use a fresh queue with no consumer so messages stay as "ready"
+			const q = uniqueQueue();
+			await provider.enqueue(q, { data: { message: "test1" } });
+			await provider.enqueue(q, { data: { message: "test2" } });
 
 			// Small delay for RabbitMQ to process
 			await new Promise((resolve) => setTimeout(resolve, 50));
 
-			const stats = await provider.getQueueStats(testQueue);
+			const stats = await provider.getQueueStats(q);
 			expect(stats.waiting).toBe(2);
 			expect(stats.processing).toBe(0);
 			expect(stats.deadLetter).toBe(0);
+
+			await provider.clearQueue(q);
 		});
 
 		test("should return correct stats with scheduled tasks", async () => {
@@ -971,8 +1008,8 @@ describe("RabbitMqTaskProvider", () => {
 
 	describe("multiple queues", () => {
 		test("should maintain separate queues", async () => {
-			const queue1 = `${testQueue}-1`;
-			const queue2 = `${testQueue}-2`;
+			const queue1 = uniqueQueue();
+			const queue2 = uniqueQueue();
 
 			let queue1Processed = false;
 			let queue2Processed = false;
@@ -1081,9 +1118,10 @@ describe("RabbitMqTaskProvider", () => {
 
 	describe("edge cases", () => {
 		test("should handle disconnect during task processing", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 50 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 50 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			const handler: TaskHandler = {
 				id: "test-handler",
@@ -1093,8 +1131,8 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
 			// Wait just enough for processing to start
 			await new Promise((resolve) => setTimeout(resolve, 50));
@@ -1107,11 +1145,12 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should handle polling loop exit when inactive", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 20 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 20 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
-			await customProvider.dequeue(testQueue, {
+			await customProvider.dequeue(q, {
 				id: "test-handler",
 				handler: async () => {},
 			});
@@ -1130,12 +1169,14 @@ describe("RabbitMqTaskProvider", () => {
 		});
 
 		test("should handle extended timeout expiration triggering reject", async () => {
-			const customProvider = new RabbitMqTaskProvider({
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({
 				timeout: 5000,
+				retries: 1,
 				pollInterval: 50,
 			});
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			let extendCalled = false;
 			const handler: TaskHandler = {
@@ -1150,35 +1191,36 @@ describe("RabbitMqTaskProvider", () => {
 				},
 			};
 
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "test" } });
 
-			await waitFor(() => extendCalled);
-
-			// Wait for extended timeout to fire
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			// Wait for processing and extended timeout to eventually move to DLQ
+			await waitFor(async () => {
+				const dlq = await customProvider.getDeadLetterTasks(q);
+				return extendCalled && dlq.length > 0;
+			}, 10_000);
 
 			expect(extendCalled).toBe(true);
 
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
+			await customProvider.clearQueue(q);
 		});
 
 		test("should handle disconnect during scheduled task processing", async () => {
-			const customProvider = new RabbitMqTaskProvider({ pollInterval: 50 });
+			const q = uniqueQueue();
+			const customProvider = await createCustomProvider({ pollInterval: 50 });
 			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
+			await customProvider.clearQueue(q);
 
 			// Enqueue multiple scheduled tasks
 			for (let i = 0; i < 5; i++) {
-				await customProvider.enqueue(testQueue, {
+				await customProvider.enqueue(q, {
 					data: { message: `scheduled-${i}` },
 					scheduledAt: Date.now() + 10, // Very short delay
 				});
 			}
 
 			// Register a handler to start polling
-			await customProvider.dequeue(testQueue, {
+			await customProvider.dequeue(q, {
 				id: "test-handler",
 				handler: async () => {},
 			});
