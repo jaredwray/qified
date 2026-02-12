@@ -51,8 +51,8 @@ importers:
   packages/qified:
     dependencies:
       hookified:
-        specifier: ^1.14.0
-        version: 1.15.0
+        specifier: ^1.15.1
+        version: 1.15.1
 
   packages/rabbitmq:
     dependencies:
