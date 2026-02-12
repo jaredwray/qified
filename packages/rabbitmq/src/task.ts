@@ -65,9 +65,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	// In-memory tracking for attempt counts: taskId -> count
 	private readonly _attemptCounts: Map<string, number> = new Map();
 
-	// Dead letter tasks for stats: queue -> Task[]
-	private readonly _deadLetterTasks: Map<string, Task[]> = new Map();
-
 	// Track queue -> set of taskIds for cleanup
 	private readonly _queueTaskIds: Map<string, Set<string>> = new Map();
 
@@ -282,12 +279,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		channel.sendToQueue(dlqName, Buffer.from(JSON.stringify(task)), {
 			persistent: true,
 		});
-
-		if (!this._deadLetterTasks.has(queue)) {
-			this._deadLetterTasks.set(queue, []);
-		}
-
-		this._deadLetterTasks.get(queue)?.push(task);
 
 		// Clean up in-memory tracking
 		this._attemptCounts.delete(task.id);
@@ -622,7 +613,27 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	 * @returns Array of tasks in the dead-letter queue
 	 */
 	public async getDeadLetterTasks(queue: string): Promise<Task[]> {
-		return this._deadLetterTasks.get(queue) ?? [];
+		const channel = await this.getChannel();
+		const dlqName = `${queue}:dead-letter`;
+		await channel.assertQueue(dlqName, { durable: true });
+
+		const tasks: Task[] = [];
+		// Drain DLQ messages using basic.get, then nack them back so they
+		// remain in the queue for future inspection.
+		let msg = await channel.get(dlqName, { noAck: false });
+		while (msg) {
+			try {
+				const task = JSON.parse(msg.content.toString()) as Task;
+				tasks.push(task);
+			} catch {
+				// Skip malformed messages
+			}
+
+			channel.nack(msg, false, true);
+			msg = await channel.get(dlqName, { noAck: false });
+		}
+
+		return tasks;
 	}
 
 	/**
@@ -649,8 +660,17 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 			// Queue assertion failed
 		}
 
+		let deadLetter = 0;
+		try {
+			const channel = await this.getChannel();
+			const dlqInfo = await channel.assertQueue(`${queue}:dead-letter`, { durable: true });
+			deadLetter = dlqInfo.messageCount;
+		} catch {
+			/* v8 ignore next -- @preserve */
+			// DLQ assertion failed
+		}
+
 		const processing = this._processingTasks.get(queue)?.size ?? 0;
-		const deadLetter = this._deadLetterTasks.get(queue)?.length ?? 0;
 
 		return {
 			waiting,
@@ -674,7 +694,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		await channel.assertQueue(`${queue}:dead-letter`, { durable: true });
 		await channel.purgeQueue(`${queue}:dead-letter`);
 
-		this._deadLetterTasks.delete(queue);
 		this._processingTasks.delete(queue);
 
 		// Clear task data for this queue
