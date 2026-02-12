@@ -41,12 +41,11 @@
     "url": "https://github.com/jaredwray/qified/issues"
   },
   "homepage": "https://github.com/jaredwray/qified#readme",
-  "devDependencies": {},
   "files": [
     "dist",
     "LICENSE"
   ],
   "dependencies": {
-    "hookified": "^1.14.0"
+    "hookified": "^1.15.1"
   }
 }
