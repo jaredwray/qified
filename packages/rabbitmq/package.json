@@ -33,7 +33,8 @@
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
-    "amqplib": "^0.10.9"
+    "amqplib": "^0.10.9",
+    "hookified": "^1.15.1"
   },
   "peerDependencies": {
     "qified": "workspace:^"

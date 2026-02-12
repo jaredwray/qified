@@ -59,6 +59,9 @@ importers:
       amqplib:
         specifier: ^0.10.9
         version: 0.10.9
+      hookified:
+        specifier: ^1.15.1
+        version: 1.15.1
       qified:
         specifier: workspace:^
         version: link:../qified
