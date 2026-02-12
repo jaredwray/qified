@@ -2,7 +2,7 @@
 
 RabbitMQ message and task provider for [Qified](https://github.com/jaredwray/qified).
 
-This package implements a message provider and a task provider backed by RabbitMQ. The message provider uses queues for publish/subscribe operations, and the task provider adds reliable task queue processing with retries, timeouts, scheduled tasks, and dead-letter queues.
+This package implements a message provider and a task provider backed by RabbitMQ. The message provider uses queues for publish/subscribe operations, and the task provider adds reliable task queue processing with retries, timeouts, and dead-letter queues.
 
 ## Table of Contents
 
@@ -73,12 +73,6 @@ await taskProvider.enqueue("my-queue", {
         data: { action: "send-email", to: "user@example.com" },
 });
 
-// Enqueue a scheduled task (processed after the given time)
-await taskProvider.enqueue("my-queue", {
-        data: { action: "send-reminder" },
-        scheduledAt: Date.now() + 60_000, // 1 minute from now
-});
-
 // Dequeue and process tasks
 await taskProvider.dequeue("my-queue", {
         id: "email-handler",
@@ -98,7 +92,7 @@ await taskProvider.dequeue("my-queue", {
 
 // Get queue statistics
 const stats = await taskProvider.getQueueStats("my-queue");
-console.log(stats); // { waiting, processing, deadLetter, scheduled }
+console.log(stats); // { waiting, processing, deadLetter }
 
 // Get dead-letter tasks for inspection
 const deadLetters = await taskProvider.getDeadLetterTasks("my-queue");
@@ -159,7 +153,6 @@ Configuration options for the RabbitMQ task provider. Extends `TaskProviderOptio
 - `id?`: Unique identifier for this provider instance. Defaults to `"@qified/rabbitmq-task"`.
 - `timeout?`: Default timeout in milliseconds for task processing. Defaults to `30000`.
 - `retries?`: Default maximum retry attempts before a task is moved to the dead-letter queue. Defaults to `3`.
-- `pollInterval?`: Interval in milliseconds to poll for scheduled tasks. Defaults to `1000`.
 - `reconnectTimeInSeconds?`: Time in seconds to wait before reconnecting after connection loss. Set to `0` to disable. Defaults to `5`.
 
 ### RabbitMqTaskProvider
@@ -168,7 +161,6 @@ Implements the `TaskProvider` interface using RabbitMQ durable queues for reliab
 
 - Automatic retries with configurable max attempts
 - Task timeouts with automatic rejection on expiry
-- Scheduled tasks (processed after a given timestamp)
 - Dead-letter queue for failed tasks
 - Automatic reconnection on connection loss
 
@@ -190,7 +182,6 @@ Task data options:
 - `id?`: Custom task ID. Auto-generated if omitted.
 - `timeout?`: Per-task timeout override in milliseconds.
 - `retries?`: Per-task max retry override.
-- `scheduledAt?`: Unix timestamp (ms). Task will not be processed until this time.
 - `priority?`: Task priority value.
 
 #### dequeue(queue: string, handler: TaskHandler)
@@ -221,7 +212,7 @@ Returns an array of tasks that have been moved to the dead-letter queue for the 
 Returns statistics for the given queue:
 
 ```ts
-{ waiting: number; processing: number; deadLetter: number; scheduled: number }
+{ waiting: number; processing: number; deadLetter: number }
 ```
 
 #### clearQueue(queue: string)

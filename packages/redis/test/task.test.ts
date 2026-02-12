@@ -239,7 +239,6 @@ describe("RedisTaskProvider", () => {
 				priority: 10,
 				maxRetries: 5,
 				timeout: 5000,
-				scheduledAt: Date.now() + 10000,
 			});
 
 			expect(taskId).toBeDefined();
@@ -723,62 +722,6 @@ describe("RedisTaskProvider", () => {
 		});
 	});
 
-	describe("scheduled tasks", () => {
-		test("should not process task before scheduledAt time", async () => {
-			let processed = false;
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					processed = true;
-				},
-			};
-
-			await provider.dequeue(testQueue, handler);
-			await provider.enqueue(testQueue, {
-				data: { message: "test" },
-				scheduledAt: Date.now() + 2000, // Schedule 2 seconds in future
-			});
-
-			await new Promise((resolve) => setTimeout(resolve, 200));
-
-			expect(processed).toBe(false);
-			const stats = await provider.getQueueStats(testQueue);
-			expect(stats.scheduled).toBe(1);
-		});
-
-		test("should process task after scheduledAt time via polling", async () => {
-			const customProvider = new RedisTaskProvider({ pollInterval: 50 });
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			let processed = false;
-			const handler: TaskHandler = {
-				id: "test-handler",
-				handler: async () => {
-					processed = true;
-				},
-			};
-
-			await customProvider.dequeue(testQueue, handler);
-			await customProvider.enqueue(testQueue, {
-				data: { message: "test" },
-				scheduledAt: Date.now() + 100, // Schedule 100ms in future
-			});
-
-			// Task should not be processed yet
-			await new Promise((resolve) => setTimeout(resolve, 50));
-			expect(processed).toBe(false);
-
-			// Wait for scheduled task to be processed by polling
-			await new Promise((resolve) => setTimeout(resolve, 200));
-
-			expect(processed).toBe(true);
-
-			await customProvider.clearQueue(testQueue);
-			await customProvider.disconnect();
-		});
-	});
-
 	describe("unsubscribe", () => {
 		test("should unsubscribe specific handler by id", async () => {
 			const handler1: TaskHandler = {
@@ -921,7 +864,6 @@ describe("RedisTaskProvider", () => {
 				waiting: 0,
 				processing: 0,
 				deadLetter: 0,
-				scheduled: 0,
 			});
 		});
 
@@ -933,17 +875,6 @@ describe("RedisTaskProvider", () => {
 			expect(stats.waiting).toBe(2);
 			expect(stats.processing).toBe(0);
 			expect(stats.deadLetter).toBe(0);
-		});
-
-		test("should return correct stats with scheduled tasks", async () => {
-			await provider.enqueue(testQueue, {
-				data: { message: "test" },
-				scheduledAt: Date.now() + 10000,
-			});
-
-			const stats = await provider.getQueueStats(testQueue);
-			expect(stats.scheduled).toBe(1);
-			expect(stats.waiting).toBe(0);
 		});
 
 		test("should return correct stats with dead-letter tasks", async () => {
@@ -1075,10 +1006,6 @@ describe("RedisTaskProvider", () => {
 		test("should clear all data for a queue", async () => {
 			// Add tasks to various states
 			await provider.enqueue(testQueue, { data: { message: "test1" } });
-			await provider.enqueue(testQueue, {
-				data: { message: "test2" },
-				scheduledAt: Date.now() + 10000,
-			});
 
 			const handler: TaskHandler = {
 				id: "test-handler",
@@ -1094,9 +1021,7 @@ describe("RedisTaskProvider", () => {
 
 			// Verify data exists
 			const statsBefore = await provider.getQueueStats(testQueue);
-			expect(
-				statsBefore.waiting + statsBefore.scheduled + statsBefore.deadLetter,
-			).toBeGreaterThan(0);
+			expect(statsBefore.waiting + statsBefore.deadLetter).toBeGreaterThan(0);
 
 			// Clear queue
 			await provider.clearQueue(testQueue);
@@ -1106,7 +1031,6 @@ describe("RedisTaskProvider", () => {
 			expect(statsAfter.waiting).toBe(0);
 			expect(statsAfter.processing).toBe(0);
 			expect(statsAfter.deadLetter).toBe(0);
-			expect(statsAfter.scheduled).toBe(0);
 		});
 	});
 
@@ -1143,34 +1067,6 @@ describe("RedisTaskProvider", () => {
 
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
-		});
-
-		test("should handle disconnect during scheduled task processing", async () => {
-			// This test covers early return in checkScheduledTasks (lines 293, 308)
-			const customProvider = new RedisTaskProvider({ pollInterval: 50 });
-			await customProvider.connect();
-			await customProvider.clearQueue(testQueue);
-
-			// Enqueue multiple scheduled tasks
-			for (let i = 0; i < 5; i++) {
-				await customProvider.enqueue(testQueue, {
-					data: { message: `scheduled-${i}` },
-					scheduledAt: Date.now() + 10, // Very short delay
-				});
-			}
-
-			// Register a handler to start polling
-			await customProvider.dequeue(testQueue, {
-				id: "test-handler",
-				handler: async () => {},
-			});
-
-			// Wait a tiny bit then disconnect during processing
-			await new Promise((resolve) => setTimeout(resolve, 30));
-			await customProvider.disconnect();
-
-			// Should not throw - disconnect handled gracefully
-			expect(customProvider.taskHandlers.size).toBe(0);
 		});
 
 		test("should handle disconnect during timed out task processing", async () => {

@@ -19,8 +19,6 @@ export type RabbitMqTaskProviderOptions = TaskProviderOptions & {
 	uri?: string;
 	/** Unique identifier for this provider instance. Defaults to "@qified/rabbitmq-task" */
 	id?: string;
-	/** Poll interval in milliseconds for checking scheduled tasks. Defaults to 1000 */
-	pollInterval?: number;
 	/** Time in seconds to wait before reconnecting. Set to 0 to disable. Defaults to 5 */
 	reconnectTimeInSeconds?: number;
 };
@@ -36,9 +34,6 @@ export const defaultTimeout = 30_000;
 
 /** Default maximum retry attempts */
 export const defaultRetries = 3;
-
-/** Default poll interval (1 second) */
-export const defaultPollInterval = 1000;
 
 /** Default reconnect time in seconds */
 export const defaultReconnectTimeInSeconds = 5;
@@ -65,19 +60,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	private _connectionPromise: Promise<void> | null = null;
 
 	private _active = true;
-	private _pollInterval: number;
-	private readonly _pollTimers: Map<string, ReturnType<typeof setTimeout>> =
-		new Map();
 	private readonly _consumerTags: Map<string, string> = new Map();
 
 	// In-memory tracking for attempt counts: taskId -> count
 	private readonly _attemptCounts: Map<string, number> = new Map();
-
-	// Scheduled tasks: queue -> entries
-	private readonly _scheduledTasks: Map<
-		string,
-		Array<{ task: Task; scheduledAt: number }>
-	> = new Map();
 
 	// Dead letter tasks for stats: queue -> Task[]
 	private readonly _deadLetterTasks: Map<string, Task[]> = new Map();
@@ -98,7 +84,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		this._id = options.id ?? defaultRabbitMqTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
 		this._retries = options.retries ?? defaultRetries;
-		this._pollInterval = options.pollInterval ?? defaultPollInterval;
 		this._reconnectTimeInSeconds =
 			options.reconnectTimeInSeconds ?? defaultReconnectTimeInSeconds;
 		this._taskHandlers = new Map();
@@ -485,74 +470,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
-	 * Checks for scheduled tasks that are ready to execute.
-	 */
-	private async checkScheduledTasks(queue: string): Promise<void> {
-		/* v8 ignore next -- @preserve */
-		if (!this._active) {
-			return;
-		}
-
-		const scheduled = this._scheduledTasks.get(queue);
-		if (!scheduled || scheduled.length === 0) {
-			return;
-		}
-
-		const now = Date.now();
-		const ready: Array<{ task: Task; scheduledAt: number }> = [];
-		const remaining: Array<{ task: Task; scheduledAt: number }> = [];
-
-		for (const entry of scheduled) {
-			/* v8 ignore next -- @preserve */
-			if (!this._active) {
-				return;
-			}
-
-			if (entry.scheduledAt <= now) {
-				ready.push(entry);
-			} else {
-				remaining.push(entry);
-			}
-		}
-
-		this._scheduledTasks.set(queue, remaining);
-
-		for (const entry of ready) {
-			/* v8 ignore next -- @preserve */
-			if (!this._active) {
-				return;
-			}
-
-			await this.publishTask(queue, entry.task);
-		}
-	}
-
-	/**
-	 * Starts the polling loop for a queue.
-	 */
-	private startPolling(queue: string): void {
-		const poll = async () => {
-			/* v8 ignore next -- @preserve */
-			if (!this._active) {
-				return;
-			}
-
-			try {
-				await this.checkScheduledTasks(queue);
-			} catch (error) {
-				/* v8 ignore next -- @preserve */
-				this.emit("error", error);
-			}
-
-			if (this._active && this._taskHandlers.has(queue)) {
-				this._pollTimers.set(queue, setTimeout(poll, this._pollInterval));
-			}
-		};
-
-		this._pollTimers.set(queue, setTimeout(poll, this._pollInterval));
-	}
-
-	/**
 	 * Enqueues a task to a specific queue.
 	 * @param queue The queue name to enqueue to
 	 * @param taskData The task data to enqueue
@@ -569,20 +486,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 			...taskData,
 		};
 
-		// If scheduled for the future, hold in memory
-		if (task.scheduledAt && task.scheduledAt > Date.now()) {
-			if (!this._scheduledTasks.has(queue)) {
-				this._scheduledTasks.set(queue, []);
-			}
-
-			this._scheduledTasks.get(queue)?.push({
-				task,
-				scheduledAt: task.scheduledAt,
-			});
-			return task.id;
-		}
-
-		// Publish to RabbitMQ queue immediately
+		// Publish to RabbitMQ queue
 		await this.publishTask(queue, task);
 		return task.id;
 	}
@@ -607,11 +511,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		if (!this._consumerTags.has(queue)) {
 			const channel = await this.getChannel();
 			await this._setupConsumer(channel, queue);
-		}
-
-		// Start polling for scheduled tasks if not already
-		if (!this._pollTimers.has(queue)) {
-			this.startPolling(queue);
 		}
 	}
 
@@ -648,12 +547,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 				this._consumerTags.delete(queue);
 			}
-
-			const timer = this._pollTimers.get(queue);
-			if (timer) {
-				clearTimeout(timer);
-				this._pollTimers.delete(queue);
-			}
 		}
 	}
 
@@ -671,16 +564,8 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 			this._reconnectTimer = undefined;
 		}
 
-		// Clear all poll timers
-		for (const timer of this._pollTimers.values()) {
-			clearTimeout(timer);
-		}
-
-		this._pollTimers.clear();
-
 		// Clear handlers and in-memory state
 		this._taskHandlers.clear();
-		this._scheduledTasks.clear();
 		this._attemptCounts.clear();
 		this._queueTaskIds.clear();
 		this._processingTasks.clear();
@@ -740,13 +625,12 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	 * Uses assertQueue to safely check queue state without risking channel closure.
 	 * @param queue The queue name
 	 * @returns Queue statistics: `waiting` (ready messages in RabbitMQ), `processing` (tasks
-	 *   currently being handled by this provider instance), `deadLetter`, and `scheduled`.
+	 *   currently being handled by this provider instance), and `deadLetter`.
 	 */
 	public async getQueueStats(queue: string): Promise<{
 		waiting: number;
 		processing: number;
 		deadLetter: number;
-		scheduled: number;
 	}> {
 		let waiting = 0;
 		try {
@@ -762,13 +646,11 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 		const processing = this._processingTasks.get(queue)?.size ?? 0;
 		const deadLetter = this._deadLetterTasks.get(queue)?.length ?? 0;
-		const scheduled = this._scheduledTasks.get(queue)?.length ?? 0;
 
 		return {
 			waiting,
 			processing,
 			deadLetter,
-			scheduled,
 		};
 	}
 
@@ -788,7 +670,6 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		await channel.purgeQueue(`${queue}:dead-letter`);
 
 		this._deadLetterTasks.delete(queue);
-		this._scheduledTasks.delete(queue);
 		this._processingTasks.delete(queue);
 
 		// Clear task data for this queue

@@ -8,7 +8,6 @@ import {
 } from "qified";
 
 export {
-	defaultPollInterval,
 	defaultRabbitMqTaskId,
 	defaultRetries as defaultTaskRetries,
 	defaultTimeout as defaultTaskTimeout,

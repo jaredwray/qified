@@ -223,14 +223,6 @@ export class MemoryTaskProvider implements TaskProvider {
 				continue;
 			}
 
-			// Check if task is scheduled for later
-			if (
-				queuedTask.task.scheduledAt &&
-				queuedTask.task.scheduledAt > Date.now()
-			) {
-				continue;
-			}
-
 			// Mark as processing
 			queuedTask.processing = true;
 			processingSet.add(queuedTask.task.id);

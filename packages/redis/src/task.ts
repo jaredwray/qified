@@ -18,7 +18,7 @@ export type RedisTaskProviderOptions = TaskProviderOptions & {
 	uri?: string;
 	/** Unique identifier for this provider instance. Defaults to "@qified/redis-task" */
 	id?: string;
-	/** Poll interval in milliseconds for checking scheduled and timed-out tasks. Defaults to 1000 */
+	/** Poll interval in milliseconds for checking timed-out tasks. Defaults to 1000 */
 	pollInterval?: number;
 };
 
@@ -162,13 +162,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
-	 * Gets the Redis key for scheduled tasks sorted set.
-	 */
-	private getScheduledKey(queue: string): string {
-		return `${queue}:scheduled`;
-	}
-
-	/**
 	 * Gets the Redis key for processing tasks sorted set.
 	 */
 	private getProcessingKey(queue: string): string {
@@ -221,17 +214,8 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		// Initialize attempt count
 		await client.set(this.getTaskAttemptKey(queue, task.id), "0");
 
-		// Add to appropriate queue
-		if (task.scheduledAt && task.scheduledAt > Date.now()) {
-			// Add to scheduled sorted set with scheduledAt as score
-			await client.zAdd(this.getScheduledKey(queue), {
-				score: task.scheduledAt,
-				value: task.id,
-			});
-		} else {
-			// Add to queue list (LPUSH for FIFO with RPOP)
-			await client.lPush(this.getQueueKey(queue), task.id);
-		}
+		// Add to queue list (LPUSH for FIFO with RPOP)
+		await client.lPush(this.getQueueKey(queue), task.id);
 
 		// Process immediately if handlers are registered
 		void this.processQueue(queue);
@@ -275,7 +259,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			}
 
 			try {
-				await this.checkScheduledTasks(queue);
 				await this.checkTimedOutTasks(queue);
 				await this.processQueue(queue);
 			} catch (error) {
@@ -289,36 +272,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		};
 
 		this._pollTimers.set(queue, setTimeout(poll, this._pollInterval));
-	}
-
-	/**
-	 * Checks for scheduled tasks that are ready to execute.
-	 */
-	private async checkScheduledTasks(queue: string): Promise<void> {
-		/* v8 ignore next -- @preserve */
-		if (!this._active) {
-			return;
-		}
-
-		const client = await this.getClient();
-		const now = Date.now();
-
-		// Get scheduled tasks with score <= now
-		const readyTasks = await client.zRangeByScore(
-			this.getScheduledKey(queue),
-			0,
-			now,
-		);
-
-		for (const taskId of readyTasks) {
-			/* v8 ignore next -- @preserve */
-			if (!this._active) {
-				return;
-			}
-			// Move from scheduled to queue
-			await client.zRem(this.getScheduledKey(queue), taskId);
-			await client.lPush(this.getQueueKey(queue), taskId);
-		}
 	}
 
 	/**
@@ -683,22 +636,19 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		waiting: number;
 		processing: number;
 		deadLetter: number;
-		scheduled: number;
 	}> {
 		const client = await this.getClient();
 
-		const [waiting, processing, deadLetter, scheduled] = await Promise.all([
+		const [waiting, processing, deadLetter] = await Promise.all([
 			client.lLen(this.getQueueKey(queue)),
 			client.zCard(this.getProcessingKey(queue)),
 			client.lLen(this.getDeadLetterKey(queue)),
-			client.zCard(this.getScheduledKey(queue)),
 		]);
 
 		return {
 			waiting,
 			processing,
 			deadLetter,
-			scheduled,
 		};
 	}
 
@@ -710,20 +660,13 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		const client = await this.getClient();
 
 		// Get all task IDs from all locations
-		const [queueTasks, processingTasks, deadLetterTasks, scheduledTasks] =
-			await Promise.all([
-				client.lRange(this.getQueueKey(queue), 0, -1),
-				client.zRange(this.getProcessingKey(queue), 0, -1),
-				client.lRange(this.getDeadLetterKey(queue), 0, -1),
-				client.zRange(this.getScheduledKey(queue), 0, -1),
-			]);
+		const [queueTasks, processingTasks, deadLetterTasks] = await Promise.all([
+			client.lRange(this.getQueueKey(queue), 0, -1),
+			client.zRange(this.getProcessingKey(queue), 0, -1),
+			client.lRange(this.getDeadLetterKey(queue), 0, -1),
+		]);
 
-		const allTaskIds = [
-			...queueTasks,
-			...processingTasks,
-			...deadLetterTasks,
-			...scheduledTasks,
-		];
+		const allTaskIds = [...queueTasks, ...processingTasks, ...deadLetterTasks];
 
 		// Delete all task data and attempt counters
 		for (const taskId of allTaskIds) {
@@ -735,6 +678,5 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		await client.del(this.getQueueKey(queue));
 		await client.del(this.getProcessingKey(queue));
 		await client.del(this.getDeadLetterKey(queue));
-		await client.del(this.getScheduledKey(queue));
 	}
 }
