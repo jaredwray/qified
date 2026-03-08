@@ -60,7 +60,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 * @param options Configuration options for the provider
 	 */
 	constructor(options: RedisTaskProviderOptions = {}) {
-		super();
+		super({ throwOnEmptyListeners: false });
 		const uri = options.uri ?? defaultRedisUri;
 		this._id = options.id ?? defaultRedisTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
