@@ -978,7 +978,7 @@ describe("RedisTaskProvider", () => {
 			const stats = await customProvider.getQueueStats(testQueue);
 			expect(
 				stats.deadLetter + stats.waiting + stats.processing,
-			).toBeGreaterThanOrEqual(0);
+			).toBeGreaterThanOrEqual(1);
 
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
@@ -1109,7 +1109,7 @@ describe("RedisTaskProvider", () => {
 			const stats = await customProvider.getQueueStats(testQueue);
 			expect(
 				stats.waiting + stats.deadLetter + stats.processing,
-			).toBeGreaterThanOrEqual(0);
+			).toBeGreaterThanOrEqual(1);
 
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
@@ -1173,7 +1173,7 @@ describe("RedisTaskProvider", () => {
 			// Either it's in DLQ, still processing, or waiting for retry
 			expect(
 				stats.deadLetter + stats.processing + stats.waiting,
-			).toBeGreaterThanOrEqual(0);
+			).toBeGreaterThanOrEqual(1);
 
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
@@ -1412,9 +1412,11 @@ describe("RedisTaskProvider", () => {
 
 			// Task should be in dead-letter queue after failing
 			const stats = await customProvider.getQueueStats(testQueue);
-			expect(
-				stats.deadLetter + stats.waiting + stats.processing,
-			).toBeGreaterThanOrEqual(0);
+			expect(stats).toEqual({
+				deadLetter: 1,
+				waiting: 0,
+				processing: 0,
+			});
 
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
