@@ -28,6 +28,30 @@ Task and Message Queues with Multiple Providers
 * Customizable Compress / Decompress Handlers (Coming in v1.0.0)
 * Provider Fail Over Support
 
+# Table of Contents
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Constructor](#constructor)
+- [Properties](#properties)
+- [Methods](#methods)
+  - [subscribe](#subscribe)
+  - [publish](#publish)
+  - [unsubscribe](#unsubscribe)
+  - [disconnect](#disconnect)
+- [Events](#events)
+  - [Available Events](#available-events)
+  - [Listening to Events](#listening-to-events)
+  - [Error Handling with Events](#error-handling-with-events)
+- [Hooks](#hooks)
+  - [Available Hooks](#available-hooks)
+  - [Using Hooks](#using-hooks)
+  - [Modifying Data with Before Hooks](#modifying-data-with-before-hooks)
+  - [Modifying Topics with Before Hooks](#modifying-topics-with-before-hooks)
+  - [Multiple Hooks](#multiple-hooks)
+  - [Hooks vs Events](#hooks-vs-events)
+- [Providers](#providers)
+- [Development and Testing](#development-and-testing)
+- [License](#license)
 
 # Installation
 
@@ -326,7 +350,7 @@ The following hooks are available via the `QifiedHooks` enum:
 
 ## Using Hooks
 
-Use the `onHook()` method to register a hook handler:
+Use the `onHook()` method to register a hook handler. Hooks use the `IHook` object format from [Hookified](https://hookified.org):
 
 ```js
 import { Qified, MemoryMessageProvider, QifiedHooks } from 'qified';
@@ -335,15 +359,30 @@ const qified = new Qified({
   messageProviders: new MemoryMessageProvider()
 });
 
-// Register a before hook
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  console.log('About to publish to:', context.topic);
+// Register a before hook using IHook object
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    console.log('About to publish to:', context.topic);
+  }
 });
 
-// Register an after hook
-qified.onHook(QifiedHooks.afterPublish, async (context) => {
-  console.log('Published message:', context.message.id);
+// Register an after hook with an id for later removal
+qified.onHook({
+  id: 'publish-logger',
+  event: QifiedHooks.afterPublish,
+  handler: async (context) => {
+    console.log('Published message:', context.message.id);
+  }
 });
+
+// Register with options to control position
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    console.log('This runs first');
+  }
+}, { position: 'Top' });
 ```
 
 ## Modifying Data with Before Hooks
