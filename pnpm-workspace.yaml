@@ -3,6 +3,9 @@ packages:
 
 minimumReleaseAge: 2880
 
+minimumReleaseAgeExclude:
+  - hookified
+
 onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
