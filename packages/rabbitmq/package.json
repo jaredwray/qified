@@ -34,7 +34,7 @@
   "license": "MIT",
   "dependencies": {
     "amqplib": "^0.10.9",
-    "hookified": "^1.15.1"
+    "hookified": "^2.1.0"
   },
   "peerDependencies": {
     "qified": "workspace:^"

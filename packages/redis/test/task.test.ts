@@ -109,6 +109,7 @@ describe("RedisTaskProvider", () => {
 
 	beforeEach(async () => {
 		provider = new RedisTaskProvider();
+		provider.throwOnEmptyListeners = false;
 		await provider.connect();
 		await provider.clearQueue(testQueue);
 	});
@@ -468,6 +469,7 @@ describe("RedisTaskProvider", () => {
 				retries: 3,
 				pollInterval: 100,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -502,6 +504,7 @@ describe("RedisTaskProvider", () => {
 				timeout: 100,
 				pollInterval: 50,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -539,6 +542,7 @@ describe("RedisTaskProvider", () => {
 				timeout: 200,
 				pollInterval: 50,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -952,6 +956,7 @@ describe("RedisTaskProvider", () => {
 				retries: 2,
 				pollInterval: 30,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -985,6 +990,7 @@ describe("RedisTaskProvider", () => {
 				timeout: 20,
 				pollInterval: 30,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1074,6 +1080,7 @@ describe("RedisTaskProvider", () => {
 				timeout: 5000,
 				pollInterval: 50,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1111,6 +1118,7 @@ describe("RedisTaskProvider", () => {
 		test("should handle processQueue when _active becomes false after getClient", async () => {
 			// This test covers line 376 (early return after getClient when _active is false)
 			const customProvider = new RedisTaskProvider({ pollInterval: 30 });
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1142,6 +1150,7 @@ describe("RedisTaskProvider", () => {
 				retries: 1,
 				pollInterval: 20,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1211,6 +1220,7 @@ describe("RedisTaskProvider", () => {
 				retries: 5,
 				pollInterval: 20,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1249,6 +1259,7 @@ describe("RedisTaskProvider", () => {
 				retries: 1, // Only 1 retry allowed
 				pollInterval: 15,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1296,6 +1307,7 @@ describe("RedisTaskProvider", () => {
 				retries: 5,
 				pollInterval: 15,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
