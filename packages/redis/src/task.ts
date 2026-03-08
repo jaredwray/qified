@@ -492,9 +492,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 							void context.reject(true);
 						}
 					}, ttl);
-					/* v8 ignore stop */
 				} catch (error) {
-					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
 				}
 			},
@@ -503,6 +501,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				maxRetries,
 			},
 		};
+		/* v8 ignore stop */
 
 		// Set timeout handler
 		timeoutHandle = setTimeout(() => {
