@@ -38,13 +38,12 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@nats-io/transport-node": "^3.3.0",
+    "@nats-io/transport-node": "^3.3.1",
     "nats": "^2.29.3"
   },
   "peerDependencies": {
     "qified": "workspace:^"
   },
-  "devDependencies": {},
   "files": [
     "dist",
     "LICENSE"
