@@ -985,6 +985,7 @@ describe("RedisTaskProvider", () => {
 				timeout: 20,
 				pollInterval: 30,
 			});
+			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 

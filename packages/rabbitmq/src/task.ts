@@ -76,7 +76,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	 * @param options Configuration options for the provider
 	 */
 	constructor(options: RabbitMqTaskProviderOptions = {}) {
-		super({ throwOnEmptyListeners: false });
+		super();
 		this._uri = options.uri ?? defaultRabbitMqTaskUri;
 		this._id = options.id ?? defaultRabbitMqTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
