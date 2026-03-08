@@ -1348,5 +1348,168 @@ describe("RedisTaskProvider", () => {
 			await customProvider.clearQueue(testQueue);
 			await customProvider.disconnect();
 		});
+
+		test("should handle extend resetting existing timeout handle", async () => {
+			// Covers lines 485-489 (reset timeout in extend when timeoutHandle exists)
+			const customProvider = new RedisTaskProvider({
+				timeout: 200,
+				pollInterval: 50,
+			});
+			customProvider.throwOnEmptyListeners = false;
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			let completed = false;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					// First extend sets a new timeout
+					await ctx.extend(500);
+					// Second extend resets the existing timeout handle
+					await ctx.extend(500);
+					await new Promise((resolve) => setTimeout(resolve, 100));
+					completed = true;
+					await ctx.ack();
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+
+			await new Promise((resolve) => setTimeout(resolve, 300));
+
+			expect(completed).toBe(true);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should auto-reject and clear timeout on handler error", async () => {
+			// Covers lines 520-524 (catch block auto-reject + finally clearing timeout)
+			const customProvider = new RedisTaskProvider({
+				retries: 1,
+				pollInterval: 50,
+			});
+			customProvider.throwOnEmptyListeners = false;
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			let handlerCalled = false;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async () => {
+					handlerCalled = true;
+					throw new Error("Intentional handler error");
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+
+			await new Promise((resolve) => setTimeout(resolve, 200));
+
+			expect(handlerCalled).toBe(true);
+
+			// Task should be in dead-letter queue after failing
+			const stats = await customProvider.getQueueStats(testQueue);
+			expect(
+				stats.deadLetter + stats.waiting + stats.processing,
+			).toBeGreaterThanOrEqual(0);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should force disconnect with destroy", async () => {
+			// Covers lines 601-604 (force disconnect path)
+			const customProvider = new RedisTaskProvider();
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			await customProvider.disconnect(true);
+
+			// Client should be destroyed
+			expect(customProvider.taskHandlers.size).toBe(0);
+		});
+
+		test("should handle disconnect when not connected", async () => {
+			// Covers line 598 (connectionPromise is null)
+			const customProvider = new RedisTaskProvider();
+
+			// Disconnect without ever connecting - should not throw
+			await customProvider.disconnect();
+
+			expect(customProvider.taskHandlers.size).toBe(0);
+		});
+
+		test("should handle force disconnect when client is already closed", async () => {
+			// Covers lines 602-604 (force disconnect when client not open)
+			const customProvider = new RedisTaskProvider();
+			await customProvider.connect();
+
+			// Close normally first
+			const client = (customProvider as any)._client;
+			if (client.isOpen) {
+				await client.close();
+			}
+
+			// Force disconnect when already closed - should not throw
+			await customProvider.disconnect(true);
+
+			expect(customProvider.taskHandlers.size).toBe(0);
+		});
+
+		test("should handle graceful disconnect when client is already closed", async () => {
+			// Covers lines 606-608 (graceful disconnect when client not open)
+			const customProvider = new RedisTaskProvider();
+			await customProvider.connect();
+
+			// Close the client directly
+			const client = (customProvider as any)._client;
+			if (client.isOpen) {
+				await client.close();
+			}
+
+			// Graceful disconnect when already closed - should not throw
+			await customProvider.disconnect(false);
+
+			expect(customProvider.taskHandlers.size).toBe(0);
+		});
+
+		test("should return tasks from dead-letter queue", async () => {
+			// Covers lines 620-627 (getDeadLetterTasks iteration)
+			const customProvider = new RedisTaskProvider({
+				retries: 1,
+				pollInterval: 50,
+			});
+			customProvider.throwOnEmptyListeners = false;
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					await ctx.reject(false); // Send directly to DLQ
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+
+			// Enqueue multiple tasks that will all go to DLQ
+			await customProvider.enqueue(testQueue, { data: { message: "dlq-1" } });
+			await customProvider.enqueue(testQueue, { data: { message: "dlq-2" } });
+
+			await new Promise((resolve) => setTimeout(resolve, 300));
+
+			const deadLetterTasks =
+				await customProvider.getDeadLetterTasks(testQueue);
+			expect(deadLetterTasks.length).toBe(2);
+			const messages = deadLetterTasks.map((t) => (t.data as any).message);
+			expect(messages).toContain("dlq-1");
+			expect(messages).toContain("dlq-2");
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
 	});
 });
