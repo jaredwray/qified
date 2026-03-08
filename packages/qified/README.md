@@ -397,28 +397,34 @@ const qified = new Qified({
 });
 
 // Add timestamp and headers to all messages
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  // Add timestamp if not present
-  context.message.timestamp = context.message.timestamp ?? Date.now();
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    // Add timestamp if not present
+    context.message.timestamp = context.message.timestamp ?? Date.now();
 
-  // Add custom headers
-  context.message.headers = {
-    ...context.message.headers,
-    'x-processed-by': 'qified',
-    'x-environment': process.env.NODE_ENV
-  };
+    // Add custom headers
+    context.message.headers = {
+      ...context.message.headers,
+      'x-processed-by': 'qified',
+      'x-environment': process.env.NODE_ENV
+    };
+  }
 });
 
 // Modify message data
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  // Add metadata to the message data
-  context.message.data = {
-    ...context.message.data,
-    _meta: {
-      version: '1.0',
-      source: 'api'
-    }
-  };
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    // Add metadata to the message data
+    context.message.data = {
+      ...context.message.data,
+      _meta: {
+        version: '1.0',
+        source: 'api'
+      }
+    };
+  }
 });
 
 // Subscribe to receive messages
@@ -445,8 +451,11 @@ You can also modify the topic in before hooks:
 
 ```js
 // Route all messages to a prefixed topic
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  context.topic = `production/${context.topic}`;
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    context.topic = `production/${context.topic}`;
+  }
 });
 
 // Subscribe to the prefixed topic
@@ -469,20 +478,37 @@ await qified.publish('events', {
 Multiple hooks for the same event execute in the order they were registered:
 
 ```js
-// First hook - runs first
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  context.message.timestamp = Date.now();
+// First hook - runs first (default position is 'Bottom')
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    context.message.timestamp = Date.now();
+  }
 });
 
 // Second hook - runs second, can see changes from first hook
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  context.message.headers = { 'x-timestamp': String(context.message.timestamp) };
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    context.message.headers = { 'x-timestamp': String(context.message.timestamp) };
+  }
 });
 
 // Third hook - runs third
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  console.log('Final message:', context.message);
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    console.log('Final message:', context.message);
+  }
 });
+
+// Use position option to insert at the top
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    console.log('This runs before all other hooks');
+  }
+}, { position: 'Top' });
 ```
 
 ## Hooks vs Events
@@ -497,8 +523,11 @@ Both hooks and events are available, but they serve different purposes:
 
 ```js
 // Hook - can modify the message before it's published
-qified.onHook(QifiedHooks.beforePublish, async (context) => {
-  context.message.timestamp = Date.now();
+qified.onHook({
+  event: QifiedHooks.beforePublish,
+  handler: async (context) => {
+    context.message.timestamp = Date.now();
+  }
 });
 
 // Event - notified after publish completes (cannot modify)
