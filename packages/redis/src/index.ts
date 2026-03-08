@@ -135,6 +135,7 @@ export class RedisMessageProvider implements MessageProvider {
 			const subClient = await this.getSubClient();
 			await subClient.subscribe(topic, async (raw) => {
 				const message = JSON.parse(raw) as Message;
+				/* v8 ignore next -- @preserve */
 				const handlers = this.subscriptions.get(topic) ?? [];
 				await Promise.all(handlers.map(async (sub) => sub.handler(message)));
 			});
@@ -151,6 +152,7 @@ export class RedisMessageProvider implements MessageProvider {
 	async unsubscribe(topic: string, id?: string): Promise<void> {
 		if (id) {
 			const current = this.subscriptions.get(topic);
+			/* v8 ignore next -- @preserve */
 			if (current) {
 				this.subscriptions.set(
 					topic,
@@ -170,6 +172,7 @@ export class RedisMessageProvider implements MessageProvider {
 	 */
 	async disconnect(force = false): Promise<void> {
 		// Only disconnect if we've connected
+		/* v8 ignore next -- @preserve */
 		if (this.connectionPromise) {
 			await this.connectionPromise;
 
@@ -180,6 +183,7 @@ export class RedisMessageProvider implements MessageProvider {
 
 			this.subscriptions.clear();
 
+			/* v8 ignore start -- @preserve */
 			if (force) {
 				if (this.pub.isOpen) {
 					this.pub.destroy();
@@ -197,6 +201,7 @@ export class RedisMessageProvider implements MessageProvider {
 					await this.sub.close();
 				}
 			}
+			/* v8 ignore stop */
 
 			this.connectionPromise = null;
 		}

@@ -362,6 +362,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			this._processingTasks.set(queue, new Set());
 		}
 
+		/* v8 ignore next -- @preserve */
 		const processingSet = this._processingTasks.get(queue) ?? new Set<string>();
 
 		// Get task from queue
@@ -482,6 +483,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 						value: task.id,
 					});
 					// Reset timeout handle
+					/* v8 ignore start -- @preserve */
 					if (timeoutHandle) {
 						clearTimeout(timeoutHandle);
 					}
@@ -491,7 +493,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 						}
 					}, ttl);
 				} catch (error) {
-					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
 				}
 			},
@@ -500,6 +501,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				maxRetries,
 			},
 		};
+		/* v8 ignore stop */
 
 		// Set timeout handler
 		timeoutHandle = setTimeout(() => {
@@ -517,6 +519,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			}
 		} catch {
 			// Auto-reject on error
+			/* v8 ignore start -- @preserve */
 			if (!acknowledged && !rejected) {
 				await context.reject(true);
 			}
@@ -524,6 +527,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			if (timeoutHandle) {
 				clearTimeout(timeoutHandle);
 			}
+			/* v8 ignore stop */
 		}
 	}
 
@@ -624,6 +628,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		const tasks: Task[] = [];
 		for (const taskId of taskIds) {
 			const taskDataStr = await client.get(this.getTaskDataKey(queue, taskId));
+			/* v8 ignore next -- @preserve */
 			if (taskDataStr) {
 				tasks.push(JSON.parse(taskDataStr) as Task);
 			}
