@@ -4,12 +4,12 @@
   "description": "Redis message provider for qified",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "require": "./dist/index.cjs",
-      "import": "./dist/index.js"
+      "import": "./dist/index.mjs"
     }
   },
   "engines": {
@@ -20,7 +20,7 @@
     "test": "pnpm lint && vitest run --coverage",
     "test:ci": "biome check --error-on-warnings && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
-    "build": "rimraf ./dist && tsup src/index.ts --format cjs,esm --dts --clean",
+    "build": "tsdown src/index.ts --format esm --format cjs --dts",
     "build:publish": "pnpm build && pnpm publish --access public --no-git-checks",
     "prepublishOnly": "pnpm build"
   },

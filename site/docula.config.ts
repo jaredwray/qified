@@ -1,21 +1,20 @@
+import type {DoculaOptions, DoculaConsole} from 'docula';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-export const options = {
+export const options: Partial<DoculaOptions> = {
 	githubPath: 'jaredwray/qified',
-	outputPath: './site/dist',
 	siteTitle: 'Qified',
 	siteDescription: 'Task and Message Queues with Multiple Providers',
 	siteUrl: 'https://qified.org',
-	sections: [
-	],
+	themeMode: 'light',
+	autoReadme: false,
 };
 
-export const onPrepare = async config => {
-	// Ensure docs directory exists
+export const onPrepare = async (config: DoculaOptions, console: DoculaConsole) => {
 	const docsPath = path.join(config.sitePath, 'docs');
-	await fs.promises.mkdir(docsPath, { recursive: true });
+	await fs.promises.mkdir(docsPath, {recursive: true});
 
 	// Copy main qified README to docs/index.md
 	const readmePath = path.join(process.cwd(), './packages/qified/README.md');
@@ -30,12 +29,12 @@ sidebarTitle: 'qified'
 order: 1
 ---
 `;
-	console.log('writing qified to', readmeSitePath);
+	console.info('writing qified to docs/index.md');
 	await fs.promises.writeFile(readmeSitePath, frontmatter + updatedReadme);
 
 	// Copy each package README to site/docs folder
 	const packagesDir = path.join(process.cwd(), './packages');
-	const allPackages = await fs.promises.readdir(packagesDir, { withFileTypes: true });
+	const allPackages = await fs.promises.readdir(packagesDir, {withFileTypes: true});
 	const packages = allPackages
 		.filter(dirent => dirent.isDirectory() && dirent.name !== 'qified')
 		.map(dirent => dirent.name);
@@ -54,10 +53,10 @@ sidebarTitle: '@qified/${pkg}'
 ---
 
 `;
-			console.log(`writing ${pkg} readme to`, pkgSitePath);
+			console.info(`writing ${pkg} readme to docs/${pkg}.md`);
 			await fs.promises.writeFile(pkgSitePath, pkgFrontmatter + pkgReadme);
 		} catch (error) {
-			console.error(`Error copying ${pkg} README:`, error.message);
+			console.error(`Error copying ${pkg} README: ${(error as Error).message}`);
 		}
 	}
 };
