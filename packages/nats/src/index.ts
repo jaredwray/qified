@@ -7,6 +7,14 @@ import {
 	type TopicHandler,
 } from "qified";
 
+export {
+	defaultNatsTaskId,
+	defaultRetries as defaultTaskRetries,
+	defaultTimeout as defaultTaskTimeout,
+	NatsTaskProvider,
+	type NatsTaskProviderOptions,
+} from "./task.js";
+
 /**
  * Configuration options for the NATS message provider.
  */
