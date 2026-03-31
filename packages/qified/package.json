@@ -46,6 +46,6 @@
     "LICENSE"
   ],
   "dependencies": {
-    "hookified": "^2.1.0"
+    "hookified": "^2.1.1"
   }
 }

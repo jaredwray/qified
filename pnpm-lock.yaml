@@ -51,8 +51,8 @@ importers:
   packages/qified:
     dependencies:
       hookified:
-        specifier: ^2.1.0
-        version: 2.1.0
+        specifier: ^2.1.1
+        version: 2.1.1
 
   packages/rabbitmq:
     dependencies:
@@ -1538,6 +1538,9 @@ packages:
 
   hookified@2.1.0:
     resolution: {integrity: sha512-ootKng4eaxNxa7rx6FJv2YKef3DuhqbEj3l70oGXwddPQEEnISm50TEZQclqiLTAtilT2nu7TErtCO523hHkyg==}
+
+  hookified@2.1.1:
+    resolution: {integrity: sha512-AHb76R16GB5EsPBE2J7Ko5kiEyXwviB9P5SMrAKcuAu4vJPZttViAbj9+tZeaQE5zjDme+1vcHP78Yj/WoAveA==}
 
   html-dom-parser@5.1.8:
     resolution: {integrity: sha512-MCIUng//mF2qTtGHXJWr6OLfHWmg3Pm8ezpfiltF83tizPWY17JxT4dRLE8lykJ5bChJELoY3onQKPbufJHxYA==}
@@ -3872,6 +3875,8 @@ snapshots:
 
   hookified@2.1.0: {}
 
+  hookified@2.1.1: {}
+
   html-dom-parser@5.1.8:
     dependencies:
       domhandler: 5.0.3
@@ -4703,7 +4708,7 @@ snapshots:
 
   qified@0.9.0:
     dependencies:
-      hookified: 2.1.0
+      hookified: 2.1.1
 
   quansync@1.0.0: {}
 
@@ -5318,7 +5323,7 @@ snapshots:
       ai: 6.0.141(zod@4.3.6)
       cacheable: 2.3.4
       hashery: 1.5.1
-      hookified: 2.1.0
+      hookified: 2.1.1
       html-react-parser: 5.2.17(react@19.2.4)
       js-yaml: 4.1.1
       react: 19.2.4
