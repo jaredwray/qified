@@ -394,12 +394,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				// Remove from processing
 				this._processingTasks.get(queue)?.delete(task.id);
 			}
+			/* v8 ignore start -- @preserve */
 		})().catch((error) => {
-			/* v8 ignore next 4 -- @preserve */
 			if (this._active && !this._closing) {
 				this.emit("error", error);
 			}
 		});
+		/* v8 ignore stop */
 	}
 
 	/**
