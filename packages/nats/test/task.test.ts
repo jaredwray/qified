@@ -1041,6 +1041,32 @@ describe("NatsTaskProvider", () => {
 		});
 	});
 
+	describe("special character queue names", () => {
+		test("should handle queue names with dots and special characters", async () => {
+			const q = `orders.us.${Date.now()}`;
+			const customProvider = await createCustomProvider({});
+			await customProvider.connect();
+			await customProvider.clearQueue(q);
+
+			let processedTask: Task | undefined;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (task: Task) => {
+					processedTask = task;
+				},
+			};
+
+			await customProvider.dequeue(q, handler);
+			await customProvider.enqueue(q, { data: { message: "special" } });
+
+			await waitFor(() => processedTask !== undefined);
+
+			expect(processedTask?.data).toEqual({ message: "special" });
+
+			await customProvider.clearQueue(q);
+		});
+	});
+
 	describe("edge cases", () => {
 		test("should handle disconnect during task processing", async () => {
 			const q = uniqueQueue();

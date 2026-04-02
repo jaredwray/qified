@@ -37,9 +37,27 @@ export const defaultRetries = 3;
 /**
  * Converts a queue name to a valid JetStream stream name.
  * JetStream stream names must be alphanumeric, dash, or underscore.
+ * Uses hex-encoding for special characters to prevent collisions
+ * (e.g. "orders.us" and "orders_us" produce different stream names).
  */
 function toStreamName(queue: string): string {
-	return `TASKS_${queue.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+	const encoded = queue.replace(/[^a-zA-Z0-9_-]/g, (c) => {
+		const hex = c.charCodeAt(0).toString(16).padStart(2, "0");
+		return `x${hex}`;
+	});
+	return `TASKS_${encoded}`;
+}
+
+/**
+ * Converts a queue name to a valid JetStream durable consumer name.
+ * Uses the same hex-encoding as stream names to avoid invalid characters.
+ */
+function toConsumerName(queue: string): string {
+	const encoded = queue.replace(/[^a-zA-Z0-9_-]/g, (c) => {
+		const hex = c.charCodeAt(0).toString(16).padStart(2, "0");
+		return `x${hex}`;
+	});
+	return `${encoded}-worker`;
 }
 
 /**
@@ -63,6 +81,9 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 
 	// In-memory tracking for attempt counts: taskId -> count
 	private readonly _attemptCounts: Map<string, number> = new Map();
+
+	// Track queue -> set of taskIds for attempt cleanup
+	private readonly _queueTaskIds: Map<string, Set<string>> = new Map();
 
 	// Track currently processing tasks: queue -> set of taskIds
 	private readonly _processingTasks: Map<string, Set<string>> = new Map();
@@ -221,7 +242,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		const nc = await this.getConnection();
 		const jsm = await jetstreamManager(nc);
 		const streamName = toStreamName(queue);
-		const consumerName = `${queue}-worker`;
+		const consumerName = toConsumerName(queue);
 
 		try {
 			await jsm.consumers.info(streamName, consumerName);
@@ -267,6 +288,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 
 		await js.publish(subject, JSON.stringify(task));
 
+		// Track task for queue-scoped cleanup
+		if (!this._queueTaskIds.has(queue)) {
+			this._queueTaskIds.set(queue, new Set());
+		}
+
+		this._queueTaskIds.get(queue)?.add(task.id);
+
 		return task.id;
 	}
 
@@ -301,7 +329,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		const nc = await this.getConnection();
 		const js = jetstream(nc);
 		const streamName = toStreamName(queue);
-		const consumerName = `${queue}-worker`;
+		const consumerName = toConsumerName(queue);
 
 		const consumer = await js.consumers.get(streamName, consumerName);
 
@@ -314,16 +342,25 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 			for await (const msg of messages) {
 				/* v8 ignore next 4 -- @preserve */
 				if (!this._active || abortController.signal.aborted) {
-					msg.term();
+					msg.nak();
 					break;
 				}
 
-				const task = JSON.parse(msg.string()) as Task;
+				let task: Task;
+				try {
+					task = JSON.parse(msg.string()) as Task;
+					/* v8 ignore start -- @preserve */
+				} catch {
+					msg.term();
+					continue;
+				}
+				/* v8 ignore stop */
+
 				const handlers = this._taskHandlers.get(queue);
 
 				/* v8 ignore next 4 -- @preserve */
 				if (!handlers || handlers.length === 0) {
-					msg.term();
+					msg.nak();
 					continue;
 				}
 
@@ -351,7 +388,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				};
 
 				for (const handler of handlers) {
-					await this.processTask(queue, task, handler, ackJs, termJs);
+					await this.processTask(queue, task, handler, ackJs, termJs, msg);
 				}
 
 				// Remove from processing
@@ -374,6 +411,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		handler: TaskHandler,
 		ackJs: () => void,
 		termJs: () => void,
+		msg: { working: () => void },
 	): Promise<void> {
 		const maxRetries = task.maxRetries ?? this._retries;
 		const timeout = task.timeout ?? this._timeout;
@@ -395,7 +433,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				acknowledged = true;
 				try {
 					ackJs();
-					this._attemptCounts.delete(task.id);
+					this.cleanupTask(queue, task.id);
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
@@ -430,6 +468,9 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				}
 
 				try {
+					// Notify JetStream server that we're still working
+					msg.working();
+
 					if (timeoutHandle) {
 						clearTimeout(timeoutHandle);
 					}
@@ -477,6 +518,14 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
+	 * Cleans up in-memory tracking for a task after acknowledgment.
+	 */
+	private cleanupTask(queue: string, taskId: string): void {
+		this._attemptCounts.delete(taskId);
+		this._queueTaskIds.get(queue)?.delete(taskId);
+	}
+
+	/**
 	 * Moves a task to the dead-letter queue.
 	 */
 	private async moveToDeadLetter(queue: string, task: Task): Promise<void> {
@@ -487,7 +536,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		await js.publish(dlqSubject, JSON.stringify(task));
 
 		// Clean up in-memory tracking
-		this._attemptCounts.delete(task.id);
+		this.cleanupTask(queue, task.id);
 	}
 
 	/**
@@ -538,6 +587,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		// Clear handlers and in-memory state
 		this._taskHandlers.clear();
 		this._attemptCounts.clear();
+		this._queueTaskIds.clear();
 		this._processingTasks.clear();
 		this._initializedStreams.clear();
 
@@ -553,6 +603,8 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 
 	/**
 	 * Gets all tasks in the dead-letter queue for a specific queue.
+	 * Uses a transient pull consumer to efficiently read messages without
+	 * iterating over potentially large sequence ranges.
 	 * @param queue The queue name
 	 * @returns Array of tasks in the dead-letter queue
 	 */
@@ -573,17 +625,29 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 			return [];
 		}
 
+		// Use a transient consumer to fetch DLQ messages efficiently
+		const js = jetstream(nc);
+		const consumer = await js.consumers.get(dlqStreamName);
 		const tasks: Task[] = [];
-		for (let seq = info.state.first_seq; seq <= info.state.last_seq; seq++) {
-			try {
-				const msg = await jsm.streams.getMessage(dlqStreamName, {
-					seq,
-				});
-				const task = JSON.parse(new TextDecoder().decode(msg.data)) as Task;
-				tasks.push(task);
-			} catch {
-				// Skip gaps or deleted messages
+
+		try {
+			const batch = await consumer.fetch({
+				max_messages: messageCount,
+				expires: 5000,
+			});
+			for await (const msg of batch) {
+				try {
+					const task = JSON.parse(msg.string()) as Task;
+					tasks.push(task);
+				} catch {
+					// Skip malformed messages
+				}
+
+				// Nak so messages stay in the DLQ for future inspection
+				msg.nak();
 			}
+		} catch {
+			// Consumer or fetch failed
 		}
 
 		return tasks;
@@ -653,9 +717,16 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 			// DLQ stream doesn't exist
 		}
 
-		this._processingTasks.delete(queue);
+		// Clean up attempt counts scoped to this queue only
+		const taskIds = this._queueTaskIds.get(queue);
+		if (taskIds) {
+			for (const taskId of taskIds) {
+				this._attemptCounts.delete(taskId);
+			}
 
-		// Clean up attempt counts for this queue
-		this._attemptCounts.clear();
+			this._queueTaskIds.delete(queue);
+		}
+
+		this._processingTasks.delete(queue);
 	}
 }
