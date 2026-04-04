@@ -1,11 +1,18 @@
-import { connect } from "@nats-io/transport-node";
-import type { NatsConnection, Subscription } from "nats";
+import { connect, type NatsConnection } from "@nats-io/transport-node";
 import {
 	type Message,
 	type MessageProvider,
 	Qified,
 	type TopicHandler,
 } from "qified";
+
+export {
+	defaultNatsTaskId,
+	defaultRetries as defaultTaskRetries,
+	defaultTimeout as defaultTaskTimeout,
+	NatsTaskProvider,
+	type NatsTaskProviderOptions,
+} from "./task.js";
 
 /**
  * Configuration options for the NATS message provider.
@@ -28,7 +35,10 @@ export const defaultNatsId = "@qified/nats";
 
 export class NatsMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
-	private readonly _subscriptions = new Map<string, Subscription>();
+	private readonly _subscriptions = new Map<
+		string,
+		ReturnType<NatsConnection["subscribe"]>
+	>();
 	private _connection: NatsConnection | undefined;
 	private _uri: string;
 	private _id: string;

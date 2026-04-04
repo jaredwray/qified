@@ -38,9 +38,15 @@ importers:
 
   packages/nats:
     dependencies:
+      '@nats-io/jetstream':
+        specifier: ^3.3.1
+        version: 3.3.1
       '@nats-io/transport-node':
         specifier: ^3.3.1
         version: 3.3.1
+      hookified:
+        specifier: ^2.1.1
+        version: 2.1.1
       nats:
         specifier: ^2.29.3
         version: 2.29.3
@@ -595,6 +601,9 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
+
+  '@nats-io/jetstream@3.3.1':
+    resolution: {integrity: sha512-oTIxM47pQfv4zCMlLN7FtARxSclMlUUPPn9I3VxRwMH+N2jkj1WCApu+tSL778KuljxfG8txi/MPwoWSXqbbQQ==}
 
   '@nats-io/nats-core@3.3.1':
     resolution: {integrity: sha512-myFXGTo4cCfKrsLDjkoEz7FjjjvSfBRjun7Qx3n3Z5OzW4JUY8Ou7VQsGAdXLQxHN3ae/XNXvmXxshDoFPex4w==}
@@ -2949,6 +2958,10 @@ snapshots:
       '@emnapi/runtime': 1.9.1
       '@tybys/wasm-util': 0.10.1
     optional: true
+
+  '@nats-io/jetstream@3.3.1':
+    dependencies:
+      '@nats-io/nats-core': 3.3.1
 
   '@nats-io/nats-core@3.3.1':
     dependencies:
