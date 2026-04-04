@@ -1,4 +1,3 @@
-import type { Subscription } from "@nats-io/nats-core";
 import { connect, type NatsConnection } from "@nats-io/transport-node";
 import {
 	type Message,
@@ -36,7 +35,10 @@ export const defaultNatsId = "@qified/nats";
 
 export class NatsMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
-	private readonly _subscriptions = new Map<string, Subscription>();
+	private readonly _subscriptions = new Map<
+		string,
+		ReturnType<NatsConnection["subscribe"]>
+	>();
 	private _connection: NatsConnection | undefined;
 	private _uri: string;
 	private _id: string;
