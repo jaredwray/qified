@@ -1,5 +1,5 @@
-import { connect } from "@nats-io/transport-node";
-import type { NatsConnection, Subscription } from "nats";
+import type { Subscription } from "@nats-io/nats-core";
+import { connect, type NatsConnection } from "@nats-io/transport-node";
 import {
 	type Message,
 	type MessageProvider,

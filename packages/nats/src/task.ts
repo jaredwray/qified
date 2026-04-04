@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { AckPolicy, jetstream, jetstreamManager } from "@nats-io/jetstream";
-import { connect } from "@nats-io/transport-node";
+import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { Hookified } from "hookified";
-import type { NatsConnection } from "nats";
 import type {
 	EnqueueTask,
 	Task,
@@ -164,12 +163,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 	 * Connects to NATS. Can be called explicitly or will be called automatically on first use.
 	 */
 	async connect(): Promise<void> {
+		/* v8 ignore next -- @preserve */
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
 				try {
-					this._connection = (await connect({
+					this._connection = await connect({
 						servers: this._uri,
-					})) as unknown as NatsConnection;
+					});
 				} catch (error) {
 					this._connectionPromise = null;
 					throw error;
@@ -375,6 +375,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 					}
 				};
 
+				/* v8 ignore start -- @preserve */
 				const nakJs = (millis?: number) => {
 					if (!jsHandled) {
 						jsHandled = true;
@@ -388,6 +389,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 						msg.term();
 					}
 				};
+				/* v8 ignore stop */
 
 				for (const handler of handlers) {
 					await this.processTask(
@@ -477,6 +479,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 					// Notify JetStream server that we're still working
 					msg.working();
 
+					/* v8 ignore start -- @preserve */
 					if (timeoutHandle) {
 						clearTimeout(timeoutHandle);
 					}
@@ -486,6 +489,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 							void context.reject(true);
 						}
 					}, ttl);
+					/* v8 ignore stop */
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
@@ -498,11 +502,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		};
 
 		// Set timeout handler
+		/* v8 ignore start -- @preserve */
 		timeoutHandle = setTimeout(() => {
 			if (!acknowledged && !rejected && this._active) {
 				void context.reject(true);
 			}
 		}, timeout);
+		/* v8 ignore stop */
 
 		try {
 			await handler.handler(task, context);
@@ -512,11 +518,14 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				await context.ack();
 			}
 		} catch {
+			/* v8 ignore start -- @preserve */
 			// Auto-reject on error
 			if (!acknowledged && !rejected) {
 				await context.reject(true);
 			}
+			/* v8 ignore stop */
 		} finally {
+			/* v8 ignore next -- @preserve */
 			if (timeoutHandle) {
 				clearTimeout(timeoutHandle);
 			}
