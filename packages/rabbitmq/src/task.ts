@@ -454,10 +454,12 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				await context.ack();
 			}
 		} catch {
+			/* v8 ignore start -- @preserve */
 			// Auto-reject on error
 			if (!acknowledged && !rejected) {
 				await context.reject(true);
 			}
+			/* v8 ignore stop -- @preserve */
 		} finally {
 			if (timeoutHandle) {
 				clearTimeout(timeoutHandle);

@@ -339,4 +339,214 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 
 		await provider.disconnect(true);
 	});
+
+	test("extend's inner timeout callback skips reject when already acknowledged", async () => {
+		vi.useFakeTimers();
+
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback!: (msg: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (msg: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		const provider = new RabbitMqTaskProvider({ reconnectTimeInSeconds: 0 });
+		await provider.connect();
+
+		let released!: () => void;
+		const handlerDone = new Promise<void>((resolve) => {
+			released = resolve;
+		});
+
+		// Handler extends, acks, then lingers — the extended timer must fire
+		// while acknowledged=true so the callback takes its else branch.
+		provider.taskHandlers.set("q-extend-ack", [
+			{
+				id: "h1",
+				handler: async (_task, ctx) => {
+					await ctx.extend(100);
+					await ctx.ack();
+					await handlerDone;
+				},
+			},
+		]);
+
+		const ch = (provider as unknown as { _channel: Channel })._channel;
+		await (
+			provider as unknown as {
+				_setupConsumer(ch: Channel, q: string): Promise<void>;
+			}
+		)._setupConsumer(ch, "q-extend-ack");
+
+		const task = { id: "t1", data: { message: "hi" } };
+		const message = {
+			content: Buffer.from(JSON.stringify(task)),
+			properties: {},
+			fields: {},
+		};
+
+		const processing = consumerCallback(message);
+
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(150);
+
+		released();
+		await processing;
+
+		expect(channel.ack).toHaveBeenCalledTimes(1);
+		expect(channel.nack).not.toHaveBeenCalled();
+
+		await provider.disconnect(true);
+	});
+
+	test("connect() is idempotent and reuses the in-flight promise", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqTaskProvider({ reconnectTimeInSeconds: 0 });
+
+		// Two overlapping calls — second must take the else branch and reuse the
+		// same promise rather than calling amqplib.connect again.
+		await Promise.all([provider.connect(), provider.connect()]);
+		// And a third after the first resolved — still reuses the cached promise.
+		await provider.connect();
+
+		expect(mockConnect).toHaveBeenCalledTimes(1);
+
+		await provider.disconnect(true);
+	});
+
+	test("second nackAmqp call is a no-op when multiple handlers both reject", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback!: (msg: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (msg: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+			retries: 0,
+		});
+		await provider.connect();
+
+		// Two handlers on the same queue — both reject. The first reject triggers
+		// nackAmqp (amqpHandled=true); the second must take the guard's else
+		// branch and skip the channel.nack call.
+		provider.taskHandlers.set("q-double-reject", [
+			{
+				id: "h1",
+				handler: async (_task, ctx) => {
+					await ctx.reject(false);
+				},
+			},
+			{
+				id: "h2",
+				handler: async (_task, ctx) => {
+					await ctx.reject(false);
+				},
+			},
+		]);
+
+		const ch = (provider as unknown as { _channel: Channel })._channel;
+		await (
+			provider as unknown as {
+				_setupConsumer(ch: Channel, q: string): Promise<void>;
+			}
+		)._setupConsumer(ch, "q-double-reject");
+
+		const task = { id: "t1", data: { message: "hi" } };
+		const message = {
+			content: Buffer.from(JSON.stringify(task)),
+			properties: {},
+			fields: {},
+		};
+
+		await consumerCallback(message);
+
+		// Both handlers rejected, but the shared amqpHandled flag means
+		// channel.nack fires exactly once.
+		expect(channel.nack).toHaveBeenCalledTimes(1);
+
+		await provider.disconnect(true);
+	});
+
+	test("outer timeout callback skips reject when handler already acked", async () => {
+		vi.useFakeTimers();
+
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback!: (msg: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (msg: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		// Short outer timeout; handler acks then lingers past the timeout
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+			timeout: 50,
+		});
+		await provider.connect();
+
+		let released!: () => void;
+		const handlerDone = new Promise<void>((resolve) => {
+			released = resolve;
+		});
+
+		provider.taskHandlers.set("q-outer-timeout", [
+			{
+				id: "h1",
+				handler: async (_task, ctx) => {
+					await ctx.ack();
+					await handlerDone;
+				},
+			},
+		]);
+
+		const ch = (provider as unknown as { _channel: Channel })._channel;
+		await (
+			provider as unknown as {
+				_setupConsumer(ch: Channel, q: string): Promise<void>;
+			}
+		)._setupConsumer(ch, "q-outer-timeout");
+
+		const task = { id: "t1", data: { message: "hi" } };
+		const message = {
+			content: Buffer.from(JSON.stringify(task)),
+			properties: {},
+			fields: {},
+		};
+
+		const processing = consumerCallback(message);
+
+		// Let the handler run and call ack, then fire the outer timeout
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(100);
+
+		// Release the handler so it can finish
+		released();
+		await processing;
+
+		// Outer timeout fired while acknowledged=true → should NOT nack
+		expect(channel.ack).toHaveBeenCalledTimes(1);
+		expect(channel.nack).not.toHaveBeenCalled();
+
+		await provider.disconnect(true);
+	});
 });
