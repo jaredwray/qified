@@ -367,10 +367,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					}
 				};
 
-				const nackAmqp = () => {
+				const nackAmqp = (requeue: boolean) => {
 					if (!amqpHandled) {
 						amqpHandled = true;
-						channel.nack(message_, false, false);
+						channel.nack(message_, false, requeue);
 					}
 				};
 				const isAmqpHandled = () => amqpHandled;
@@ -403,7 +403,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		task: Task,
 		handler: TaskHandler,
 		ackAmqp: () => void,
-		nackAmqp: () => void,
+		nackAmqp: (requeue: boolean) => void,
 		isAmqpHandled: () => boolean,
 	): Promise<void> {
 		const maxRetries = task.maxRetries ?? this._retries;
@@ -441,18 +441,23 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				}
 
 				rejected = true;
+				let republished = false;
 				try {
 					if (requeue && currentAttempt < maxRetries) {
 						await this.publishTask(queue, task);
 					} else {
 						await this.moveToDeadLetter(queue, task);
 					}
+
+					republished = true;
 				} catch (error) {
 					this.emit("error", error);
 				} finally {
-					// Always nack the original delivery so prefetch(1) consumers
-					// don't stall when the republish/DLQ write fails.
-					nackAmqp();
+					// If the republish/DLQ write succeeded, discard the original
+					// delivery — a new copy was persisted. If it failed, requeue
+					// the original so the broker can redeliver and we don't
+					// permanently lose the task on a transient confirm error.
+					nackAmqp(!republished);
 				}
 			},
 			extend: async (ttl: number) => {

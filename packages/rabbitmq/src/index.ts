@@ -103,6 +103,9 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		this._uri = value;
 		this._connection = undefined;
 		this._channel = undefined;
+		// Drop the cached connect promise so the next _connect() opens a fresh
+		// connection against the new URI instead of resolving against the old one.
+		this._connectionPromise = null;
 	}
 
 	/**

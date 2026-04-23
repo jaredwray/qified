@@ -51,6 +51,7 @@ export class NatsMessageProvider implements MessageProvider {
 	private _uri: string;
 	private _id: string;
 	private _reconnectTimeInSeconds: number;
+	private _connectionPromise: Promise<void> | null = null;
 
 	constructor(options: NatsMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultNatsUri;
@@ -90,6 +91,10 @@ export class NatsMessageProvider implements MessageProvider {
 	public set uri(value: string) {
 		this._uri = value;
 		this._connection = undefined;
+		// Drop the cached connect promise so the next createConnection() opens
+		// a fresh connection against the new URI instead of resolving against
+		// the old one.
+		this._connectionPromise = null;
 	}
 
 	/**
@@ -111,16 +116,29 @@ export class NatsMessageProvider implements MessageProvider {
 	/**
 	 * Creates the NATS client connection. The NATS client handles reconnection
 	 * natively — {@link reconnectTimeInSeconds} controls the wait between
-	 * attempts (0 disables it).
+	 * attempts (0 disables it). Concurrent callers are gated by
+	 * {@link _connectionPromise} so only one underlying connection is opened
+	 * per lifecycle, even under high concurrency.
 	 * @returns {Promise<void>} A promise that resolves when the connection is made.
 	 */
 	public async createConnection(): Promise<void> {
-		this._connection ??= await connect({
-			servers: this._uri,
-			reconnect: this._reconnectTimeInSeconds > 0,
-			reconnectTimeWait: this._reconnectTimeInSeconds * 1000,
-			maxReconnectAttempts: -1,
-		});
+		if (!this._connectionPromise) {
+			this._connectionPromise = (async () => {
+				try {
+					this._connection = await connect({
+						servers: this._uri,
+						reconnect: this._reconnectTimeInSeconds > 0,
+						reconnectTimeWait: this._reconnectTimeInSeconds * 1000,
+						maxReconnectAttempts: -1,
+					});
+				} catch (error) {
+					this._connectionPromise = null;
+					throw error;
+				}
+			})();
+		}
+
+		return this._connectionPromise;
 	}
 
 	/**
@@ -205,6 +223,7 @@ export class NatsMessageProvider implements MessageProvider {
 
 		await this._connection?.close();
 		this._connection = undefined;
+		this._connectionPromise = null;
 	}
 }
 

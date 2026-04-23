@@ -608,7 +608,7 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 		await provider.disconnect(true);
 	});
 
-	test("ctx.reject still nacks the original delivery when republish fails", async () => {
+	test("ctx.reject requeues the original delivery when republish fails", async () => {
 		const channel = createMockChannel();
 		const connection = createMockConnection(channel);
 		mockConnect.mockResolvedValue(connection);
@@ -659,11 +659,56 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 
 		await consumerCallback(message);
 
-		// Broker confirm failed, but the consumer must still nack so prefetch
-		// doesn't stall. The emitted error gives observability.
+		// Broker confirm failed — no retry copy was persisted. The consumer must
+		// still nack (so prefetch doesn't stall), but with requeue=true so the
+		// broker can redeliver instead of permanently dropping the task.
 		expect(channel.nack).toHaveBeenCalledTimes(1);
+		expect(channel.nack).toHaveBeenCalledWith(message, false, true);
 		expect(errors).toHaveLength(1);
 		expect((errors[0] as Error).message).toBe("broker nack");
+
+		await provider.disconnect(true);
+	});
+
+	test("ctx.reject discards the original delivery when republish succeeds", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback!: (message: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (message: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+			retries: 3,
+		});
+
+		await provider.dequeue("q-republish-ok", {
+			id: "h1",
+			handler: async (_task, ctx) => {
+				await ctx.reject(true);
+			},
+		});
+
+		const task = { id: "t1", data: { hello: "world" } };
+		const message = {
+			content: Buffer.from(JSON.stringify(task)),
+			properties: {},
+			fields: {},
+		};
+
+		await consumerCallback(message);
+
+		// Retry copy was persisted via sendToQueue — discard the original
+		// delivery (requeue=false) to avoid duplicate redelivery by the broker.
+		expect(channel.sendToQueue).toHaveBeenCalledTimes(1);
+		expect(channel.nack).toHaveBeenCalledTimes(1);
+		expect(channel.nack).toHaveBeenCalledWith(message, false, false);
 
 		await provider.disconnect(true);
 	});

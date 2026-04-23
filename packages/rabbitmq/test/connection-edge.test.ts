@@ -291,6 +291,37 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 		}
 	});
 
+	test("should reconnect against the new URI after the uri setter is used", async () => {
+		const channel1 = createMockChannel();
+		const connection1 = createMockConnection(channel1);
+		const channel2 = createMockChannel();
+		const connection2 = createMockConnection(channel2);
+
+		mockConnect
+			.mockResolvedValueOnce(connection1)
+			.mockResolvedValueOnce(connection2);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+		const first = await provider.getClient();
+		expect(first).toBe(channel1);
+		expect(mockConnect).toHaveBeenCalledWith("amqp://localhost:5672");
+
+		// Change the URI. The setter clears _connection/_channel; it must also
+		// drop the cached _connectionPromise so the next getClient() opens a
+		// fresh connection against the new URI instead of short-circuiting to
+		// the already-resolved promise (which would return undefined channel).
+		provider.uri = "amqp://new-host:5672";
+
+		const second = await provider.getClient();
+		expect(second).toBe(channel2);
+		expect(mockConnect).toHaveBeenCalledTimes(2);
+		expect(mockConnect).toHaveBeenLastCalledWith("amqp://new-host:5672");
+
+		await provider.disconnect();
+	});
+
 	test("should handle connection error event gracefully", async () => {
 		vi.useFakeTimers();
 
