@@ -17,10 +17,10 @@ Task and Message Queues with Multiple Providers
 * Simple Message Format `Message`
 * Easily Send a Message `publish()`
 * Easily Subscribe to a message Queue `subscribe()`
-* Simple Task Format `Task` (Coming in v1.0.0)
-* Easily Send a Task `enqueue()` (Coming in v1.0.0)
-* Easily Subscribe to a Task Queue `dequeue()` (Coming in v1.0.0)
-* Simple Acknowledge `Acknowledge()` in handler (Coming in v1.0.0)
+* Simple Task Format `Task`
+* Easily Send a Task `enqueue()`
+* Easily Subscribe to a Task Queue `dequeue()`
+* Ack / Reject / Extend in the handler via `TaskContext`
 * Async/Await Built In By Default
 * Written in Typescript, Nodejs Last Two Versions, ESM and CJS
 * Events and Hooks for all major actions via [Hookified](https://hookified.org)
@@ -36,7 +36,10 @@ Task and Message Queues with Multiple Providers
 - [Methods](#methods)
   - [subscribe](#subscribe)
   - [publish](#publish)
-  - [unsubscribe](#unsubscribe)
+  - [unsubscribeMessage](#unsubscribemessage)
+  - [enqueue](#enqueue)
+  - [dequeue](#dequeue)
+  - [unsubscribeTask](#unsubscribetask)
   - [disconnect](#disconnect)
 - [Events](#events)
   - [Available Events](#available-events)
