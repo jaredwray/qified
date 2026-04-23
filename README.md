@@ -9,16 +9,14 @@
 # qified
 Task and Message Queues with Multiple Providers
 
-> NOTE: This is a work in progress and not ready for production use. Please wait till v1.0.0 is released.
-
 This is a mono repo that contains the following packages:
 * [qified](packages/qified/README.md) - The main package that contains the core functionality and a built in in-memory provider.
 
 Additional packages:
-* [@qified/redis](packages/redis/README.md) - Redis Provider
-* [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider
-* [@qified/nats](packages/nats/README.md) - NATS Provider
-* [@qified/zeromq](packages/zeromq/README.md) - ZeroMQ Provider
+* [@qified/redis](packages/redis/README.md) - Redis Provider (messages and tasks)
+* [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider (messages and tasks)
+* [@qified/nats](packages/nats/README.md) - NATS Provider (messages and tasks)
+* [@qified/zeromq](packages/zeromq/README.md) - ZeroMQ Provider (messages only)
 
 # Development and Testing
 

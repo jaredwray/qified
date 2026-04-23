@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { type Channel, type ChannelModel, connect } from "amqplib";
+import { type ChannelModel, type ConfirmChannel, connect } from "amqplib";
 import { Hookified } from "hookified";
 import type {
 	EnqueueTask,
@@ -51,7 +51,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	private _taskHandlers: Map<string, TaskHandler[]>;
 
 	private _connection: ChannelModel | undefined;
-	private _channel: Channel | undefined;
+	private _channel: ConfirmChannel | undefined;
 	private _uri: string;
 	private _reconnectTimeInSeconds: number;
 	private _reconnecting = false;
@@ -151,7 +151,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				try {
 					const connection = await connect(this._uri);
 					this._connection = connection;
-					this._channel = await connection.createChannel();
+					this._channel = await connection.createConfirmChannel();
 
 					connection.on("error", () => {
 						// Connection error emitted — connection is already closing/closed.
@@ -178,7 +178,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	/**
 	 * Returns the connected channel, connecting if necessary.
 	 */
-	private async getChannel(): Promise<Channel> {
+	private async getChannel(): Promise<ConfirmChannel> {
 		if (!this._connection || !this._channel) {
 			await this.connect();
 		}
@@ -264,8 +264,19 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 		this._queueTaskIds.get(queue)?.add(task.id);
 
-		channel.sendToQueue(queue, Buffer.from(JSON.stringify(task)), {
-			persistent: true,
+		await new Promise<void>((resolve, reject) => {
+			channel.sendToQueue(
+				queue,
+				Buffer.from(JSON.stringify(task)),
+				{ persistent: true },
+				(error) => {
+					if (error) {
+						reject(error);
+					} else {
+						resolve();
+					}
+				},
+			);
 		});
 	}
 
@@ -276,8 +287,19 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		const channel = await this.getChannel();
 		const dlqName = `${queue}:dead-letter`;
 		await channel.assertQueue(dlqName, { durable: true });
-		channel.sendToQueue(dlqName, Buffer.from(JSON.stringify(task)), {
-			persistent: true,
+		await new Promise<void>((resolve, reject) => {
+			channel.sendToQueue(
+				dlqName,
+				Buffer.from(JSON.stringify(task)),
+				{ persistent: true },
+				(error) => {
+					if (error) {
+						reject(error);
+					} else {
+						resolve();
+					}
+				},
+			);
 		});
 
 		// Clean up in-memory tracking
@@ -296,7 +318,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	/**
 	 * Sets up a RabbitMQ consumer for a task queue.
 	 */
-	private async _setupConsumer(channel: Channel, queue: string): Promise<void> {
+	private async _setupConsumer(
+		channel: ConfirmChannel,
+		queue: string,
+	): Promise<void> {
 		await channel.assertQueue(queue, { durable: true });
 		await channel.assertQueue(`${queue}:dead-letter`, { durable: true });
 		await channel.prefetch(1);

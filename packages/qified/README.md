@@ -9,8 +9,6 @@
 # qified
 Task and Message Queues with Multiple Providers
 
-## NOTE: This is a work in progress and not ready for production use. Please wait till v1.0.0 is released.
-
 # Features
 
 * Simple Message Queue for Processing Messages
@@ -24,8 +22,6 @@ Task and Message Queues with Multiple Providers
 * Async/Await Built In By Default
 * Written in Typescript, Nodejs Last Two Versions, ESM and CJS
 * Events and Hooks for all major actions via [Hookified](https://hookified.org)
-* Customizable Serialize / Deserialize Handlers (Coming in v1.0.0)
-* Customizable Compress / Decompress Handlers (Coming in v1.0.0)
 * Provider Fail Over Support
 
 # Table of Contents
@@ -660,11 +656,11 @@ qified.on(QifiedEvents.publish, async (data) => {
 
 There are multiple providers available to use:
 
-* Memory - this is built into the current `qified` library as `MemoryMessageProvider`.
-* [@qified/redis](../redis/README.md) - Redis Provider
-* [@qified/rabbitmq](../rabbitmq/README.md) - RabbitMQ Provider
-* [@qified/nats](../nats/README.md) - NATS Provider
-* [@qified/zeromq](../zeromq/README.md) - ZeroMQ Provider
+* Memory - this is built into the current `qified` library as `MemoryMessageProvider` and `MemoryTaskProvider`.
+* [@qified/redis](../redis/README.md) - Redis Provider (messages and tasks)
+* [@qified/rabbitmq](../rabbitmq/README.md) - RabbitMQ Provider (messages and tasks)
+* [@qified/nats](../nats/README.md) - NATS Provider (messages and tasks)
+* [@qified/zeromq](../zeromq/README.md) - ZeroMQ Provider (messages only)
 
 # Development and Testing
 

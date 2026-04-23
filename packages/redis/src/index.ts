@@ -21,7 +21,7 @@ export {
 export type RedisMessageProviderOptions = {
 	/** Redis connection URI. Defaults to "redis://localhost:6379" */
 	uri?: string;
-	/** Unique identifier for this provider instance. Defaults to "@qified/reddis" */
+	/** Unique identifier for this provider instance. Defaults to "@qified/redis" */
 	id?: string;
 };
 
@@ -29,7 +29,7 @@ export type RedisMessageProviderOptions = {
 export const defaultRedisUri = "redis://localhost:6379";
 
 /** Default Redis provider identifier */
-export const defaultRedisId = "@qified/reddis";
+export const defaultRedisId = "@qified/redis";
 
 /**
  * Redis-based message provider for Qified.
