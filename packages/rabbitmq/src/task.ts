@@ -344,9 +344,17 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 						channel.nack(message_, false, false);
 					}
 				};
+				const isAmqpHandled = () => amqpHandled;
 
 				for (const handler of handlers) {
-					await this.processTask(queue, task, handler, ackAmqp, nackAmqp);
+					await this.processTask(
+						queue,
+						task,
+						handler,
+						ackAmqp,
+						nackAmqp,
+						isAmqpHandled,
+					);
 				}
 
 				// Remove from processing
@@ -367,6 +375,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		handler: TaskHandler,
 		ackAmqp: () => void,
 		nackAmqp: () => void,
+		isAmqpHandled: () => boolean,
 	): Promise<void> {
 		const maxRetries = task.maxRetries ?? this._retries;
 		const timeout = task.timeout ?? this._timeout;
@@ -381,7 +390,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 
 		const context: TaskContext = {
 			ack: async () => {
-				if (acknowledged || rejected || !this._active) {
+				if (acknowledged || rejected || !this._active || isAmqpHandled()) {
 					return;
 				}
 
@@ -395,7 +404,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				}
 			},
 			reject: async (requeue = true) => {
-				if (acknowledged || rejected || !this._active) {
+				// Guard against the AMQP message already being handled by a prior
+				// handler — otherwise side effects like moveToDeadLetter / publishTask
+				// would fire once per handler and duplicate tasks.
+				if (acknowledged || rejected || !this._active || isAmqpHandled()) {
 					return;
 				}
 

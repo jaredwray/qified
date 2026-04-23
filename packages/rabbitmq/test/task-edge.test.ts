@@ -365,23 +365,14 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 
 		// Handler extends, acks, then lingers — the extended timer must fire
 		// while acknowledged=true so the callback takes its else branch.
-		provider.taskHandlers.set("q-extend-ack", [
-			{
-				id: "h1",
-				handler: async (_task, ctx) => {
-					await ctx.extend(100);
-					await ctx.ack();
-					await handlerDone;
-				},
+		await provider.dequeue("q-extend-ack", {
+			id: "h1",
+			handler: async (_task, ctx) => {
+				await ctx.extend(100);
+				await ctx.ack();
+				await handlerDone;
 			},
-		]);
-
-		const ch = (provider as unknown as { _channel: Channel })._channel;
-		await (
-			provider as unknown as {
-				_setupConsumer(ch: Channel, q: string): Promise<void>;
-			}
-		)._setupConsumer(ch, "q-extend-ack");
+		});
 
 		const task = { id: "t1", data: { message: "hi" } };
 		const message = {
@@ -444,27 +435,18 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 		// Two handlers on the same queue — both reject. The first reject triggers
 		// nackAmqp (amqpHandled=true); the second must take the guard's else
 		// branch and skip the channel.nack call.
-		provider.taskHandlers.set("q-double-reject", [
-			{
-				id: "h1",
-				handler: async (_task, ctx) => {
-					await ctx.reject(false);
-				},
+		await provider.dequeue("q-double-reject", {
+			id: "h1",
+			handler: async (_task, ctx) => {
+				await ctx.reject(false);
 			},
-			{
-				id: "h2",
-				handler: async (_task, ctx) => {
-					await ctx.reject(false);
-				},
+		});
+		await provider.dequeue("q-double-reject", {
+			id: "h2",
+			handler: async (_task, ctx) => {
+				await ctx.reject(false);
 			},
-		]);
-
-		const ch = (provider as unknown as { _channel: Channel })._channel;
-		await (
-			provider as unknown as {
-				_setupConsumer(ch: Channel, q: string): Promise<void>;
-			}
-		)._setupConsumer(ch, "q-double-reject");
+		});
 
 		const task = { id: "t1", data: { message: "hi" } };
 		const message = {
@@ -476,8 +458,10 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 		await consumerCallback(message);
 
 		// Both handlers rejected, but the shared amqpHandled flag means
-		// channel.nack fires exactly once.
+		// channel.nack fires exactly once — and moveToDeadLetter's sendToQueue
+		// must also fire exactly once so the task isn't duplicated in the DLQ.
 		expect(channel.nack).toHaveBeenCalledTimes(1);
+		expect(channel.sendToQueue).toHaveBeenCalledTimes(1);
 
 		await provider.disconnect(true);
 	});
@@ -509,22 +493,13 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 			released = resolve;
 		});
 
-		provider.taskHandlers.set("q-outer-timeout", [
-			{
-				id: "h1",
-				handler: async (_task, ctx) => {
-					await ctx.ack();
-					await handlerDone;
-				},
+		await provider.dequeue("q-outer-timeout", {
+			id: "h1",
+			handler: async (_task, ctx) => {
+				await ctx.ack();
+				await handlerDone;
 			},
-		]);
-
-		const ch = (provider as unknown as { _channel: Channel })._channel;
-		await (
-			provider as unknown as {
-				_setupConsumer(ch: Channel, q: string): Promise<void>;
-			}
-		)._setupConsumer(ch, "q-outer-timeout");
+		});
 
 		const task = { id: "t1", data: { message: "hi" } };
 		const message = {
