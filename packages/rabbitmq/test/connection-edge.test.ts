@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { EventEmitter } from "node:events";
-import type { Channel, ChannelModel } from "amqplib";
+import type { ChannelModel, ConfirmChannel } from "amqplib";
 import type { Message } from "qified";
 import {
 	afterEach,
@@ -18,21 +18,36 @@ vi.mock("amqplib", () => ({
 	connect: vi.fn(),
 }));
 
-function createMockChannel(): Channel {
+function createMockChannel(): ConfirmChannel {
 	return {
 		assertQueue: vi.fn().mockResolvedValue({}),
-		sendToQueue: vi.fn().mockReturnValue(true),
+		sendToQueue: vi
+			.fn()
+			.mockImplementation(
+				(
+					_queue: string,
+					_content: Buffer,
+					_options: unknown,
+					callback?: (error: Error | null) => void,
+				) => {
+					callback?.(null);
+					return true;
+				},
+			),
+		waitForConfirms: vi.fn().mockResolvedValue(undefined),
 		consume: vi.fn().mockResolvedValue({ consumerTag: `ctag-${Date.now()}` }),
 		cancel: vi.fn().mockResolvedValue({}),
 		ack: vi.fn(),
 		close: vi.fn().mockResolvedValue(undefined),
-	} as unknown as Channel;
+	} as unknown as ConfirmChannel;
 }
 
-function createMockConnection(channel: Channel): ChannelModel & EventEmitter {
+function createMockConnection(
+	channel: ConfirmChannel,
+): ChannelModel & EventEmitter {
 	const emitter = new EventEmitter();
 	return Object.assign(emitter, {
-		createChannel: vi.fn().mockResolvedValue(channel),
+		createConfirmChannel: vi.fn().mockResolvedValue(channel),
 		close: vi.fn().mockResolvedValue(undefined),
 	}) as unknown as ChannelModel & EventEmitter;
 }
@@ -76,6 +91,37 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 		const result = await provider.getClient();
 		expect(result).toBe(channel2);
 		expect(mockConnect).toHaveBeenCalledTimes(2);
+
+		await provider.disconnect();
+	});
+
+	test("should reject publish when broker returns confirm error", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		(channel.sendToQueue as Mock).mockImplementation(
+			(
+				_queue: string,
+				_content: Buffer,
+				_options: unknown,
+				callback?: (error: Error | null) => void,
+			) => {
+				callback?.(new Error("broker nack"));
+				return true;
+			},
+		);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		await expect(
+			provider.publish("test-topic", {
+				id: "msg-1",
+				data: { hello: "world" },
+			}),
+		).rejects.toThrow("broker nack");
 
 		await provider.disconnect();
 	});

@@ -1,5 +1,7 @@
+import { Buffer } from "node:buffer";
 import { EventEmitter } from "node:events";
-import type { Channel, ChannelModel } from "amqplib";
+import type { ChannelModel, ConfirmChannel } from "amqplib";
+import type { Task } from "qified";
 import {
 	afterEach,
 	beforeEach,
@@ -16,12 +18,25 @@ vi.mock("amqplib", () => ({
 	connect: vi.fn(),
 }));
 
-function createMockChannel(): Channel {
+function createMockChannel(): ConfirmChannel {
 	return {
 		assertQueue: vi
 			.fn()
 			.mockResolvedValue({ queue: "test", messageCount: 0, consumerCount: 0 }),
-		sendToQueue: vi.fn().mockReturnValue(true),
+		sendToQueue: vi
+			.fn()
+			.mockImplementation(
+				(
+					_queue: string,
+					_content: Buffer,
+					_options: unknown,
+					callback?: (error: Error | null) => void,
+				) => {
+					callback?.(null);
+					return true;
+				},
+			),
+		waitForConfirms: vi.fn().mockResolvedValue(undefined),
 		consume: vi.fn().mockResolvedValue({ consumerTag: `ctag-${Date.now()}` }),
 		cancel: vi.fn().mockResolvedValue({}),
 		ack: vi.fn(),
@@ -29,13 +44,15 @@ function createMockChannel(): Channel {
 		prefetch: vi.fn().mockResolvedValue(undefined),
 		close: vi.fn().mockResolvedValue(undefined),
 		purgeQueue: vi.fn().mockResolvedValue({ messageCount: 0 }),
-	} as unknown as Channel;
+	} as unknown as ConfirmChannel;
 }
 
-function createMockConnection(channel: Channel): ChannelModel & EventEmitter {
+function createMockConnection(
+	channel: ConfirmChannel,
+): ChannelModel & EventEmitter {
 	const emitter = new EventEmitter();
 	return Object.assign(emitter, {
-		createChannel: vi.fn().mockResolvedValue(channel),
+		createConfirmChannel: vi.fn().mockResolvedValue(channel),
 		close: vi.fn().mockResolvedValue(undefined),
 	}) as unknown as ChannelModel & EventEmitter;
 }
@@ -258,11 +275,11 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 			},
 		]);
 
-		const ch = (provider as unknown as { _channel: Channel })._channel;
+		const ch = (provider as unknown as { _channel: ConfirmChannel })._channel;
 		// Manually call _setupConsumer
 		await (
 			provider as unknown as {
-				_setupConsumer(ch: Channel, q: string): Promise<void>;
+				_setupConsumer(ch: ConfirmChannel, q: string): Promise<void>;
 			}
 		)._setupConsumer(ch, "test-q");
 
@@ -521,6 +538,72 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 		// Outer timeout fired while acknowledged=true → should NOT nack
 		expect(channel.ack).toHaveBeenCalledTimes(1);
 		expect(channel.nack).not.toHaveBeenCalled();
+
+		await provider.disconnect(true);
+	});
+
+	test("enqueue rejects when broker returns confirm error", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		(channel.sendToQueue as Mock).mockImplementation(
+			(
+				_queue: string,
+				_content: Buffer,
+				_options: unknown,
+				callback?: (error: Error | null) => void,
+			) => {
+				callback?.(new Error("broker nack"));
+				return true;
+			},
+		);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		await expect(
+			provider.enqueue("q-nack", { data: { hello: "world" } }),
+		).rejects.toThrow("broker nack");
+
+		await provider.disconnect(true);
+	});
+
+	test("moveToDeadLetter rejects when broker returns confirm error", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		// Only fail sendToQueue when writing to the DLQ; initial enqueue must succeed.
+		(channel.sendToQueue as Mock).mockImplementation(
+			(
+				queue: string,
+				_content: Buffer,
+				_options: unknown,
+				callback?: (error: Error | null) => void,
+			) => {
+				if (queue.endsWith(":dead-letter")) {
+					callback?.(new Error("dlq nack"));
+				} else {
+					callback?.(null);
+				}
+
+				return true;
+			},
+		);
+
+		await expect(
+			(
+				provider as unknown as {
+					moveToDeadLetter(q: string, t: Task): Promise<void>;
+				}
+			).moveToDeadLetter("q-dlq", { id: "t1", data: {} }),
+		).rejects.toThrow("dlq nack");
 
 		await provider.disconnect(true);
 	});

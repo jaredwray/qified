@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { type Channel, type ChannelModel, connect } from "amqplib";
+import { type ChannelModel, type ConfirmChannel, connect } from "amqplib";
 import {
 	type Message,
 	type MessageProvider,
@@ -50,7 +50,7 @@ export const defaultReconnectTimeInSeconds = 5;
 export class RabbitMqMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
 	private _connection: ChannelModel | undefined;
-	private _channel: Channel | undefined;
+	private _channel: ConfirmChannel | undefined;
 	private readonly _consumerTags = new Map<string, string>();
 	private _uri: string;
 	private _id: string;
@@ -130,9 +130,9 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	/**
 	 * Gets the RabbitMQ client connection.
-	 * @returns {Promise<Channel>} A promise that resolves to the RabbitMQ channel.
+	 * @returns {Promise<ConfirmChannel>} A promise that resolves to the RabbitMQ confirm channel.
 	 */
-	public async getClient(): Promise<Channel> {
+	public async getClient(): Promise<ConfirmChannel> {
 		if (!this._connection || !this._channel) {
 			await this._connect();
 		}
@@ -143,9 +143,9 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	/**
 	 * Gets the RabbitMQ channel.
-	 * @returns {Promise<Channel>} A promise that resolves to the RabbitMQ channel.
+	 * @returns {Promise<ConfirmChannel>} A promise that resolves to the RabbitMQ confirm channel.
 	 */
-	public async getChannel(): Promise<Channel> {
+	public async getChannel(): Promise<ConfirmChannel> {
 		if (!this._channel) {
 			await this.getClient();
 		}
@@ -156,9 +156,10 @@ export class RabbitMqMessageProvider implements MessageProvider {
 
 	/**
 	 * Publishes a message to a specified topic.
+	 * Resolves once the broker has acknowledged receipt via publisher confirms.
 	 * @param {string} topic The topic to publish the message to.
 	 * @param {Message} message The message to publish.
-	 * @returns {Promise<void>} A promise that resolves when the message is published.
+	 * @returns {Promise<void>} A promise that resolves when the broker acks the message.
 	 */
 	public async publish(
 		topic: string,
@@ -170,10 +171,20 @@ export class RabbitMqMessageProvider implements MessageProvider {
 			...message,
 			providerId: this._id,
 		};
-		channel.sendToQueue(
-			topic,
-			Buffer.from(JSON.stringify(messageWithProvider)),
-		);
+		await new Promise<void>((resolve, reject) => {
+			channel.sendToQueue(
+				topic,
+				Buffer.from(JSON.stringify(messageWithProvider)),
+				{},
+				(error) => {
+					if (error) {
+						reject(error);
+					} else {
+						resolve();
+					}
+				},
+			);
+		});
 	}
 
 	/**
@@ -262,7 +273,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	private async _connect(): Promise<void> {
 		const connection = await connect(this._uri);
 		this._connection = connection;
-		this._channel = await connection.createChannel();
+		this._channel = await connection.createConfirmChannel();
 
 		connection.on("error", () => {
 			// Connection error emitted — connection is already closing/closed.

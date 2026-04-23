@@ -91,9 +91,10 @@ export class NatsMessageProvider implements MessageProvider {
 
 	/**
 	 * Publishes a message to a specified topic.
+	 * Resolves once the NATS server has received the message (via flush).
 	 * @param {string} topic The topic to publish the message to.
 	 * @param {Message} message The message to publish.
-	 * @returns {Promise<void>} A promise that resolves when the message is published.
+	 * @returns {Promise<void>} A promise that resolves when the server has received the message.
 	 */
 	public async publish(
 		topic: string,
@@ -106,6 +107,8 @@ export class NatsMessageProvider implements MessageProvider {
 		};
 		// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the connection is created before use
 		this._connection!.publish(topic, JSON.stringify(messageWithProvider));
+		// biome-ignore lint/style/noNonNullAssertion: connection is still valid after publish
+		await this._connection!.flush();
 	}
 
 	/**
