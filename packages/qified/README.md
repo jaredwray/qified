@@ -17,10 +17,10 @@ Task and Message Queues with Multiple Providers
 * Simple Message Format `Message`
 * Easily Send a Message `publish()`
 * Easily Subscribe to a message Queue `subscribe()`
-* Simple Task Format `Task` (Coming in v1.0.0)
-* Easily Send a Task `enqueue()` (Coming in v1.0.0)
-* Easily Subscribe to a Task Queue `dequeue()` (Coming in v1.0.0)
-* Simple Acknowledge `Acknowledge()` in handler (Coming in v1.0.0)
+* Simple Task Format `Task`
+* Easily Send a Task `enqueue()`
+* Easily Subscribe to a Task Queue `dequeue()`
+* Ack / Reject / Extend in the handler via `TaskContext`
 * Async/Await Built In By Default
 * Written in Typescript, Nodejs Last Two Versions, ESM and CJS
 * Events and Hooks for all major actions via [Hookified](https://hookified.org)
@@ -36,7 +36,10 @@ Task and Message Queues with Multiple Providers
 - [Methods](#methods)
   - [subscribe](#subscribe)
   - [publish](#publish)
-  - [unsubscribe](#unsubscribe)
+  - [unsubscribeMessage](#unsubscribemessage)
+  - [enqueue](#enqueue)
+  - [dequeue](#dequeue)
+  - [unsubscribeTask](#unsubscribetask)
   - [disconnect](#disconnect)
 - [Events](#events)
   - [Available Events](#available-events)
@@ -160,7 +163,32 @@ qified.messageProviders.forEach(provider => {
 **Important Notes:**
 - Setting this property does **not** automatically disconnect existing providers
 - You should call `disconnect()` on old providers before replacing them to clean up resources
-- All operations (`subscribe`, `publish`, `unsubscribe`) will execute across all providers in this array
+- All message operations (`subscribe`, `publish`, `unsubscribeMessage`) will execute across all message providers in this array
+
+### `taskProviders: TaskProvider[]`
+
+Get or set the array of task providers. Works the same way as `messageProviders` — getter returns the active providers, setter replaces them.
+
+**Type:** `TaskProvider[]`
+
+**Access:** Read/Write
+
+**Example:**
+```typescript
+import { Qified, MemoryTaskProvider } from 'qified';
+import { RedisTaskProvider } from '@qified/redis';
+
+const qified = new Qified({
+  taskProviders: new MemoryTaskProvider()
+});
+
+// Replace with a Redis-backed task provider
+qified.taskProviders = [
+  new RedisTaskProvider({ uri: 'redis://localhost:6379' })
+];
+```
+
+All task operations (`enqueue`, `dequeue`, `unsubscribeTask`) execute across every task provider in this array.
 
 # Methods
 
@@ -205,9 +233,9 @@ await qified.publish('user-events', {
 });
 ```
 
-## unsubscribe
+## unsubscribeMessage
 
-Unsubscribe from a topic. If an `id` is provided, only that handler is unsubscribed. Otherwise, all handlers for the topic are unsubscribed.
+Unsubscribe a message handler from a topic. If an `id` is provided, only that handler is unsubscribed. Otherwise, all handlers for the topic are unsubscribed.
 
 **Parameters:**
 - `topic: string` - The topic to unsubscribe from
@@ -216,10 +244,73 @@ Unsubscribe from a topic. If an `id` is provided, only that handler is unsubscri
 **Example:**
 ```js
 // Unsubscribe a specific handler
-await qified.unsubscribe('user-events', 'userEventHandler');
+await qified.unsubscribeMessage('user-events', 'userEventHandler');
 
 // Unsubscribe all handlers for a topic
-await qified.unsubscribe('user-events');
+await qified.unsubscribeMessage('user-events');
+```
+
+## enqueue
+
+Enqueue a task to a queue. If multiple task providers are configured, this will enqueue on all of them and return the id assigned by each provider (in provider order).
+
+**Parameters:**
+- `queue: string` - The queue to enqueue to
+- `task: EnqueueTask` - The task payload. `id` and `timestamp` are assigned by the provider
+
+**Returns:** `Promise<string[]>` - The task ids from each provider
+
+**Example:**
+```js
+const ids = await qified.enqueue('image-processing', {
+  data: { imageUrl: 'https://example.com/img.png' },
+  headers: { 'x-source': 'uploader' },
+  maxRetries: 3,
+  timeout: 30_000
+});
+
+console.log('Enqueued as', ids);
+```
+
+## dequeue
+
+Register a handler to process tasks from a queue. If multiple task providers are configured, this registers the handler on all of them. The handler receives the task and a `TaskContext` with `ack()`, `reject()`, and `extend()` methods.
+
+**Parameters:**
+- `queue: string` - The queue to dequeue from
+- `handler: TaskHandler` - Object containing an optional `id` and a `handler(task, context)` function
+
+**Example:**
+```js
+await qified.dequeue('image-processing', {
+  id: 'resizer',
+  handler: async (task, context) => {
+    try {
+      await processImage(task.data.imageUrl);
+      await context.ack();
+    } catch (error) {
+      // true = requeue for retry; false = send to dead-letter queue
+      await context.reject(true);
+    }
+  }
+});
+```
+
+## unsubscribeTask
+
+Unsubscribe a task handler from a queue. If an `id` is provided, only that handler is unsubscribed. Otherwise, all handlers for the queue are unsubscribed.
+
+**Parameters:**
+- `queue: string` - The queue to unsubscribe from
+- `id?: string` - Optional handler ID. If not provided, all handlers are unsubscribed
+
+**Example:**
+```js
+// Unsubscribe a specific handler
+await qified.unsubscribeTask('image-processing', 'resizer');
+
+// Unsubscribe all handlers for a queue
+await qified.unsubscribeTask('image-processing');
 ```
 
 ## disconnect
@@ -241,7 +332,10 @@ The following events are available via the `QifiedEvents` enum:
 
 - `QifiedEvents.publish` - Emitted after a message is successfully published
 - `QifiedEvents.subscribe` - Emitted after successfully subscribing to a topic
-- `QifiedEvents.unsubscribe` - Emitted after successfully unsubscribing from a topic
+- `QifiedEvents.unsubscribeMessage` - Emitted after successfully unsubscribing a message handler from a topic
+- `QifiedEvents.enqueue` - Emitted after a task is successfully enqueued
+- `QifiedEvents.dequeue` - Emitted after successfully registering a task handler on a queue
+- `QifiedEvents.unsubscribeTask` - Emitted after successfully unsubscribing a task handler from a queue
 - `QifiedEvents.disconnect` - Emitted after successfully disconnecting from all providers
 - `QifiedEvents.error` - Emitted when an error occurs during any operation
 - `QifiedEvents.info` - Emitted for informational messages
@@ -270,9 +364,29 @@ await qified.on(QifiedEvents.subscribe, async (data) => {
   console.log('Handler ID:', data.handler.id);
 });
 
-// Listen for unsubscribe events
-await qified.on(QifiedEvents.unsubscribe, async (data) => {
+// Listen for unsubscribeMessage events
+await qified.on(QifiedEvents.unsubscribeMessage, async (data) => {
   console.log('Unsubscribed from topic:', data.topic);
+  if (data.id) {
+    console.log('Handler ID:', data.id);
+  }
+});
+
+// Listen for enqueue events
+await qified.on(QifiedEvents.enqueue, async (data) => {
+  console.log('Task enqueued to queue:', data.queue);
+  console.log('Assigned ids:', data.ids);
+});
+
+// Listen for dequeue events
+await qified.on(QifiedEvents.dequeue, async (data) => {
+  console.log('Handler registered on queue:', data.queue);
+  console.log('Handler ID:', data.handler.id);
+});
+
+// Listen for unsubscribeTask events
+await qified.on(QifiedEvents.unsubscribeTask, async (data) => {
+  console.log('Unsubscribed from queue:', data.queue);
   if (data.id) {
     console.log('Handler ID:', data.id);
   }
@@ -301,7 +415,7 @@ await qified.publish('events', {
   data: { text: 'Hello!' }
 });
 
-await qified.unsubscribe('events', 'handler1');
+await qified.unsubscribeMessage('events', 'handler1');
 await qified.disconnect();
 ```
 
@@ -343,10 +457,16 @@ The following hooks are available via the `QifiedHooks` enum:
 | `afterSubscribe` | Called after subscribing to a topic | `{ topic, handler }` |
 | `beforePublish` | Called before publishing a message | `{ topic, message }` |
 | `afterPublish` | Called after publishing a message | `{ topic, message }` |
-| `beforeUnsubscribe` | Called before unsubscribing from a topic | `{ topic, id }` |
-| `afterUnsubscribe` | Called after unsubscribing from a topic | `{ topic, id }` |
-| `beforeDisconnect` | Called before disconnecting from providers | `{ providerCount }` |
-| `afterDisconnect` | Called after disconnecting from providers | `{ providerCount }` |
+| `beforeUnsubscribeMessage` | Called before unsubscribing a message handler | `{ topic, id }` |
+| `afterUnsubscribeMessage` | Called after unsubscribing a message handler | `{ topic, id }` |
+| `beforeEnqueue` | Called before enqueueing a task | `{ queue, task }` |
+| `afterEnqueue` | Called after enqueueing a task | `{ queue, task, ids }` |
+| `beforeDequeue` | Called before registering a task handler | `{ queue, handler }` |
+| `afterDequeue` | Called after registering a task handler | `{ queue, handler }` |
+| `beforeUnsubscribeTask` | Called before unsubscribing a task handler | `{ queue, id }` |
+| `afterUnsubscribeTask` | Called after unsubscribing a task handler | `{ queue, id }` |
+| `beforeDisconnect` | Called before disconnecting from providers | `{ messageProviderCount, taskProviderCount }` |
+| `afterDisconnect` | Called after disconnecting from providers | `{ messageProviderCount, taskProviderCount }` |
 
 ## Using Hooks
 

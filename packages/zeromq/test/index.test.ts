@@ -114,7 +114,7 @@ describe("ZmqMessageProvider", () => {
 
 		expect(received).toEqual({ ...message, providerId: "@qified/zeromq" });
 
-		await qified.unsubscribe("test-topic", id);
+		await qified.unsubscribeMessage("test-topic", id);
 		await qified.disconnect();
 	});
 

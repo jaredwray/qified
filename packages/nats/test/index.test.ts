@@ -200,7 +200,7 @@ describe("NATSMessageProvider", () => {
 		});
 		expect(received).toEqual({ ...message, providerId: "@qified/nats" });
 
-		await qified.unsubscribe("test-topic", id);
+		await qified.unsubscribeMessage("test-topic", id);
 		await qified.disconnect();
 	});
 

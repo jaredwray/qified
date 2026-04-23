@@ -6,7 +6,7 @@ import {
 	Qified,
 	QifiedEvents,
 } from "../src/index.js";
-import type { Message } from "../src/types.js";
+import type { Message, Task, TaskContext } from "../src/types.js";
 
 describe("Qified", () => {
 	test("constructor", () => {
@@ -55,6 +55,29 @@ describe("Qified", () => {
 		await qified.disconnect();
 		expect(qified.messageProviders.length).toBe(0);
 		expect(memoryProvider.subscriptions.size).toBe(0);
+	});
+
+	test("should disconnect all task providers", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		expect(qified.taskProviders.length).toBe(1);
+		await qified.disconnect();
+		expect(qified.taskProviders.length).toBe(0);
+		expect(taskProvider.taskHandlers.size).toBe(0);
+	});
+
+	test("should disconnect both message and task providers together", async () => {
+		const messageProvider = new MemoryMessageProvider();
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({
+			messageProviders: [messageProvider],
+			taskProviders: [taskProvider],
+		});
+		expect(qified.messageProviders.length).toBe(1);
+		expect(qified.taskProviders.length).toBe(1);
+		await qified.disconnect();
+		expect(qified.messageProviders.length).toBe(0);
+		expect(qified.taskProviders.length).toBe(0);
 	});
 
 	test("should emit disconnect event when disconnect succeeds", async () => {
@@ -142,7 +165,7 @@ describe("Qified Messaging", () => {
 		expect(handlerCalled).toBe(true);
 	});
 
-	test("should unsubscribe from a topic", async () => {
+	test("should unsubscribe from a topic via unsubscribeMessage", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		let handlerCalled = false;
@@ -158,24 +181,24 @@ describe("Qified Messaging", () => {
 		});
 		expect(handlerCalled).toBe(true);
 
-		await qified.unsubscribe("test/topic", "testHandler");
+		await qified.unsubscribeMessage("test/topic", "testHandler");
 		expect(memoryProvider.subscriptions.get("test/topic")?.length).toBe(0);
 	});
 
-	test("should emit unsubscribe event when unsubscribe succeeds", async () => {
+	test("should emit unsubscribeMessage event when unsubscribeMessage succeeds", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		let unsubscribeEmitted = false;
 		let emittedData: any;
 
-		await qified.on(QifiedEvents.unsubscribe, async (data: any) => {
+		await qified.on(QifiedEvents.unsubscribeMessage, async (data: any) => {
 			unsubscribeEmitted = true;
 			emittedData = data;
 		});
 
 		const handler = async (_message: any) => {};
 		await qified.subscribe("test/topic", { id: "testHandler", handler });
-		await qified.unsubscribe("test/topic", "testHandler");
+		await qified.unsubscribeMessage("test/topic", "testHandler");
 
 		expect(unsubscribeEmitted).toBe(true);
 		expect(emittedData.topic).toBe("test/topic");
@@ -218,5 +241,160 @@ describe("Qified Messaging", () => {
 		expect(subscribeEmitted).toBe(true);
 		expect(emittedData.topic).toBe("test/topic");
 		expect(emittedData.handler.id).toBe("testHandler");
+	});
+});
+
+describe("Qified Tasks", () => {
+	test("should be able to dequeue from a queue", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		const handler = async (_task: Task, _context: TaskContext) => {
+			await _context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "testHandler", handler });
+		expect(taskProvider.taskHandlers.size).toBe(1);
+		expect(taskProvider.taskHandlers.get("test/queue")?.length).toBe(1);
+	});
+
+	test("should be able to dequeue with multiple providers", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const anotherProvider = new MemoryTaskProvider();
+		const qified = new Qified({
+			taskProviders: [taskProvider, anotherProvider],
+		});
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "testHandler", handler });
+		expect(taskProvider.taskHandlers.get("test/queue")?.length).toBe(1);
+		expect(anotherProvider.taskHandlers.get("test/queue")?.length).toBe(1);
+	});
+
+	test("should enqueue a task and fan out across providers", async () => {
+		const providerA = new MemoryTaskProvider();
+		const providerB = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [providerA, providerB] });
+		let receivedA = 0;
+		let receivedB = 0;
+
+		await providerA.dequeue("test/queue", {
+			id: "a",
+			handler: async (task: Task, context: TaskContext) => {
+				receivedA += 1;
+				expect(task.data.content).toBe("Hello, World!");
+				await context.ack();
+			},
+		});
+		await providerB.dequeue("test/queue", {
+			id: "b",
+			handler: async (task: Task, context: TaskContext) => {
+				receivedB += 1;
+				expect(task.data.content).toBe("Hello, World!");
+				await context.ack();
+			},
+		});
+
+		const ids = await qified.enqueue("test/queue", {
+			data: { content: "Hello, World!" },
+		});
+
+		expect(ids).toHaveLength(2);
+		expect(typeof ids[0]).toBe("string");
+		expect(receivedA).toBe(1);
+		expect(receivedB).toBe(1);
+	});
+
+	test("should unsubscribe a task handler from a queue", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "testHandler", handler });
+		expect(taskProvider.taskHandlers.get("test/queue")?.length).toBe(1);
+
+		await qified.unsubscribeTask("test/queue", "testHandler");
+		expect(taskProvider.taskHandlers.get("test/queue")?.length ?? 0).toBe(0);
+	});
+
+	test("should unsubscribe all task handlers when id is not provided", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "handler1", handler });
+		await qified.dequeue("test/queue", { id: "handler2", handler });
+		expect(taskProvider.taskHandlers.get("test/queue")?.length).toBe(2);
+
+		await qified.unsubscribeTask("test/queue");
+		expect(taskProvider.taskHandlers.get("test/queue")?.length ?? 0).toBe(0);
+	});
+
+	test("should emit enqueue event when enqueue succeeds", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let enqueueEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.enqueue, async (data: any) => {
+			enqueueEmitted = true;
+			emittedData = data;
+		});
+
+		await qified.enqueue("test/queue", { data: { content: "Hello" } });
+
+		expect(enqueueEmitted).toBe(true);
+		expect(emittedData.queue).toBe("test/queue");
+		expect(emittedData.ids).toHaveLength(1);
+	});
+
+	test("should emit dequeue event when dequeue succeeds", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let dequeueEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.dequeue, async (data: any) => {
+			dequeueEmitted = true;
+			emittedData = data;
+		});
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "testHandler", handler });
+
+		expect(dequeueEmitted).toBe(true);
+		expect(emittedData.queue).toBe("test/queue");
+		expect(emittedData.handler.id).toBe("testHandler");
+	});
+
+	test("should emit unsubscribeTask event when unsubscribeTask succeeds", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let unsubscribeTaskEmitted = false;
+		let emittedData: any;
+
+		await qified.on(QifiedEvents.unsubscribeTask, async (data: any) => {
+			unsubscribeTaskEmitted = true;
+			emittedData = data;
+		});
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "testHandler", handler });
+		await qified.unsubscribeTask("test/queue", "testHandler");
+
+		expect(unsubscribeTaskEmitted).toBe(true);
+		expect(emittedData.queue).toBe("test/queue");
+		expect(emittedData.id).toBe("testHandler");
+	});
+
+	test("should return empty array from enqueue when no task providers", async () => {
+		const qified = new Qified();
+		const ids = await qified.enqueue("test/queue", { data: {} });
+		expect(ids).toEqual([]);
 	});
 });

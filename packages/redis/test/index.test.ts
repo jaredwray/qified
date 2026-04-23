@@ -92,7 +92,7 @@ describe("RedisMessageProvider", () => {
 		});
 		expect(received).toEqual({ ...message, providerId: defaultRedisId });
 
-		await qified.unsubscribe("test-topic", id);
+		await qified.unsubscribeMessage("test-topic", id);
 		await qified.disconnect();
 	});
 
