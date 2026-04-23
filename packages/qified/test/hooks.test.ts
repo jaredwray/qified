@@ -457,41 +457,59 @@ describe("Qified Disconnect Hooks", () => {
 		expect(afterHookCalled).toBe(true);
 	});
 
-	test("should pass providerCount to beforeDisconnect hook", async () => {
+	test("should pass messageProviderCount and taskProviderCount to beforeDisconnect hook", async () => {
 		const memoryProvider1 = new MemoryMessageProvider();
 		const memoryProvider2 = new MemoryMessageProvider();
+		const taskProvider = new MemoryTaskProvider();
 		const qified = new Qified({
 			messageProviders: [memoryProvider1, memoryProvider2],
+			taskProviders: [taskProvider],
 		});
-		let hookProviderCount = 0;
+		let hookMessageCount = 0;
+		let hookTaskCount = 0;
 
 		qified.onHook(
 			QifiedHooks.beforeDisconnect,
-			async (context: { providerCount: number }) => {
-				hookProviderCount = context.providerCount;
+			async (context: {
+				messageProviderCount: number;
+				taskProviderCount: number;
+			}) => {
+				hookMessageCount = context.messageProviderCount;
+				hookTaskCount = context.taskProviderCount;
 			},
 		);
 
 		await qified.disconnect();
 
-		expect(hookProviderCount).toBe(2);
+		expect(hookMessageCount).toBe(2);
+		expect(hookTaskCount).toBe(1);
 	});
 
-	test("should pass providerCount to afterDisconnect hook", async () => {
+	test("should pass messageProviderCount and taskProviderCount to afterDisconnect hook", async () => {
 		const memoryProvider = new MemoryMessageProvider();
-		const qified = new Qified({ messageProviders: [memoryProvider] });
-		let hookProviderCount = 0;
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({
+			messageProviders: [memoryProvider],
+			taskProviders: [taskProvider],
+		});
+		let hookMessageCount = 0;
+		let hookTaskCount = 0;
 
 		qified.onHook(
 			QifiedHooks.afterDisconnect,
-			async (context: { providerCount: number }) => {
-				hookProviderCount = context.providerCount;
+			async (context: {
+				messageProviderCount: number;
+				taskProviderCount: number;
+			}) => {
+				hookMessageCount = context.messageProviderCount;
+				hookTaskCount = context.taskProviderCount;
 			},
 		);
 
 		await qified.disconnect();
 
-		expect(hookProviderCount).toBe(1);
+		expect(hookMessageCount).toBe(1);
+		expect(hookTaskCount).toBe(1);
 	});
 
 	test("should call beforeDisconnect hook while providers still exist", async () => {
@@ -511,16 +529,23 @@ describe("Qified Disconnect Hooks", () => {
 
 	test("should call afterDisconnect hook after providers are cleared", async () => {
 		const memoryProvider = new MemoryMessageProvider();
-		const qified = new Qified({ messageProviders: [memoryProvider] });
-		let providersAtHookTime = -1;
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({
+			messageProviders: [memoryProvider],
+			taskProviders: [taskProvider],
+		});
+		let messageProvidersAtHookTime = -1;
+		let taskProvidersAtHookTime = -1;
 
 		qified.onHook(QifiedHooks.afterDisconnect, async () => {
-			providersAtHookTime = qified.messageProviders.length;
+			messageProvidersAtHookTime = qified.messageProviders.length;
+			taskProvidersAtHookTime = qified.taskProviders.length;
 		});
 
 		await qified.disconnect();
 
-		expect(providersAtHookTime).toBe(0);
+		expect(messageProvidersAtHookTime).toBe(0);
+		expect(taskProvidersAtHookTime).toBe(0);
 	});
 });
 

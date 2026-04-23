@@ -465,8 +465,8 @@ The following hooks are available via the `QifiedHooks` enum:
 | `afterDequeue` | Called after registering a task handler | `{ queue, handler }` |
 | `beforeUnsubscribeTask` | Called before unsubscribing a task handler | `{ queue, id }` |
 | `afterUnsubscribeTask` | Called after unsubscribing a task handler | `{ queue, id }` |
-| `beforeDisconnect` | Called before disconnecting from providers | `{ providerCount }` |
-| `afterDisconnect` | Called after disconnecting from providers | `{ providerCount }` |
+| `beforeDisconnect` | Called before disconnecting from providers | `{ messageProviderCount, taskProviderCount }` |
+| `afterDisconnect` | Called after disconnecting from providers | `{ messageProviderCount, taskProviderCount }` |
 
 ## Using Hooks
 

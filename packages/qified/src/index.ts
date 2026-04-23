@@ -322,23 +322,32 @@ export class Qified extends Hookified {
 
 	/**
 	 * Disconnects from all providers.
-	 * This method will call the `disconnect` method on each message provider.
+	 * This method will call the `disconnect` method on each message provider and task provider,
+	 * then clear both provider arrays.
 	 */
 	public async disconnect(): Promise<void> {
 		try {
 			// Before hook - context provides provider count info
-			const context = { providerCount: this._messageProviders.length };
+			const context = {
+				messageProviderCount: this._messageProviders.length,
+				taskProviderCount: this._taskProviders.length,
+			};
 			await this.hook(QifiedHooks.beforeDisconnect, context);
 
-			const promises = this._messageProviders.map(async (provider) =>
-				provider.disconnect(),
-			);
+			const promises = [
+				...this._messageProviders.map(async (provider) =>
+					provider.disconnect(),
+				),
+				...this._taskProviders.map(async (provider) => provider.disconnect()),
+			];
 			await Promise.all(promises);
 			this._messageProviders = [];
+			this._taskProviders = [];
 
 			// After hook
 			await this.hook(QifiedHooks.afterDisconnect, {
-				providerCount: context.providerCount,
+				messageProviderCount: context.messageProviderCount,
+				taskProviderCount: context.taskProviderCount,
 			});
 
 			this.emit(QifiedEvents.disconnect);

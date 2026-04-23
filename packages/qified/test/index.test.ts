@@ -57,6 +57,29 @@ describe("Qified", () => {
 		expect(memoryProvider.subscriptions.size).toBe(0);
 	});
 
+	test("should disconnect all task providers", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		expect(qified.taskProviders.length).toBe(1);
+		await qified.disconnect();
+		expect(qified.taskProviders.length).toBe(0);
+		expect(taskProvider.taskHandlers.size).toBe(0);
+	});
+
+	test("should disconnect both message and task providers together", async () => {
+		const messageProvider = new MemoryMessageProvider();
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({
+			messageProviders: [messageProvider],
+			taskProviders: [taskProvider],
+		});
+		expect(qified.messageProviders.length).toBe(1);
+		expect(qified.taskProviders.length).toBe(1);
+		await qified.disconnect();
+		expect(qified.messageProviders.length).toBe(0);
+		expect(qified.taskProviders.length).toBe(0);
+	});
+
 	test("should emit disconnect event when disconnect succeeds", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
