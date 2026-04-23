@@ -4,6 +4,8 @@ ZeroMQ message provider for [Qified](https://github.com/jaredwray/qified).
 
 This package implements a message provider backed by ZeroMQ using queues for publish and subscribe operations.
 
+> **Messages only:** `@qified/zeromq` does not provide a task queue implementation — ZeroMQ's pub/sub pattern does not support the ack / retry / dead-letter semantics Qified tasks rely on. For task queues use [`@qified/redis`](../redis/README.md), [`@qified/rabbitmq`](../rabbitmq/README.md), or [`@qified/nats`](../nats/README.md).
+
 ## Table of Contents
 
 - [Installation](#installation)
