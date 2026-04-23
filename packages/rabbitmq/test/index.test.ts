@@ -442,7 +442,7 @@ describe("RabbitMqMessageProvider", () => {
 
 		expect(received).toEqual({ ...message, providerId: "@qified/rabbitmq" });
 
-		await qified.unsubscribe(topic, "h1");
+		await qified.unsubscribeMessage(topic, "h1");
 		await qified.disconnect();
 	});
 

@@ -205,9 +205,9 @@ await qified.publish('user-events', {
 });
 ```
 
-## unsubscribe
+## unsubscribeMessage
 
-Unsubscribe from a topic. If an `id` is provided, only that handler is unsubscribed. Otherwise, all handlers for the topic are unsubscribed.
+Unsubscribe a message handler from a topic. If an `id` is provided, only that handler is unsubscribed. Otherwise, all handlers for the topic are unsubscribed.
 
 **Parameters:**
 - `topic: string` - The topic to unsubscribe from
@@ -216,10 +216,10 @@ Unsubscribe from a topic. If an `id` is provided, only that handler is unsubscri
 **Example:**
 ```js
 // Unsubscribe a specific handler
-await qified.unsubscribe('user-events', 'userEventHandler');
+await qified.unsubscribeMessage('user-events', 'userEventHandler');
 
 // Unsubscribe all handlers for a topic
-await qified.unsubscribe('user-events');
+await qified.unsubscribeMessage('user-events');
 ```
 
 ## disconnect
@@ -241,7 +241,7 @@ The following events are available via the `QifiedEvents` enum:
 
 - `QifiedEvents.publish` - Emitted after a message is successfully published
 - `QifiedEvents.subscribe` - Emitted after successfully subscribing to a topic
-- `QifiedEvents.unsubscribe` - Emitted after successfully unsubscribing from a topic
+- `QifiedEvents.unsubscribeMessage` - Emitted after successfully unsubscribing a message handler from a topic
 - `QifiedEvents.disconnect` - Emitted after successfully disconnecting from all providers
 - `QifiedEvents.error` - Emitted when an error occurs during any operation
 - `QifiedEvents.info` - Emitted for informational messages
@@ -270,8 +270,8 @@ await qified.on(QifiedEvents.subscribe, async (data) => {
   console.log('Handler ID:', data.handler.id);
 });
 
-// Listen for unsubscribe events
-await qified.on(QifiedEvents.unsubscribe, async (data) => {
+// Listen for unsubscribeMessage events
+await qified.on(QifiedEvents.unsubscribeMessage, async (data) => {
   console.log('Unsubscribed from topic:', data.topic);
   if (data.id) {
     console.log('Handler ID:', data.id);
@@ -301,7 +301,7 @@ await qified.publish('events', {
   data: { text: 'Hello!' }
 });
 
-await qified.unsubscribe('events', 'handler1');
+await qified.unsubscribeMessage('events', 'handler1');
 await qified.disconnect();
 ```
 

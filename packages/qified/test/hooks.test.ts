@@ -1,6 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { MemoryMessageProvider, Qified, QifiedHooks } from "../src/index.js";
-import type { Message, TopicHandler } from "../src/types.js";
+import {
+	MemoryMessageProvider,
+	MemoryTaskProvider,
+	Qified,
+	QifiedHooks,
+} from "../src/index.js";
+import type {
+	EnqueueTask,
+	Message,
+	Task,
+	TaskContext,
+	TaskHandler,
+	TopicHandler,
+} from "../src/types.js";
 
 describe("QifiedHooks", () => {
 	test("should export QifiedHooks enum with correct values", () => {
@@ -8,8 +20,18 @@ describe("QifiedHooks", () => {
 		expect(QifiedHooks.afterSubscribe).toBe("after:subscribe");
 		expect(QifiedHooks.beforePublish).toBe("before:publish");
 		expect(QifiedHooks.afterPublish).toBe("after:publish");
-		expect(QifiedHooks.beforeUnsubscribe).toBe("before:unsubscribe");
-		expect(QifiedHooks.afterUnsubscribe).toBe("after:unsubscribe");
+		expect(QifiedHooks.beforeUnsubscribeMessage).toBe(
+			"before:unsubscribeMessage",
+		);
+		expect(QifiedHooks.afterUnsubscribeMessage).toBe(
+			"after:unsubscribeMessage",
+		);
+		expect(QifiedHooks.beforeEnqueue).toBe("before:enqueue");
+		expect(QifiedHooks.afterEnqueue).toBe("after:enqueue");
+		expect(QifiedHooks.beforeDequeue).toBe("before:dequeue");
+		expect(QifiedHooks.afterDequeue).toBe("after:dequeue");
+		expect(QifiedHooks.beforeUnsubscribeTask).toBe("before:unsubscribeTask");
+		expect(QifiedHooks.afterUnsubscribeTask).toBe("after:unsubscribeTask");
 		expect(QifiedHooks.beforeDisconnect).toBe("before:disconnect");
 		expect(QifiedHooks.afterDisconnect).toBe("after:disconnect");
 	});
@@ -304,8 +326,8 @@ describe("Qified Publish Hooks", () => {
 	});
 });
 
-describe("Qified Unsubscribe Hooks", () => {
-	test("should call beforeUnsubscribe hook before unsubscribing", async () => {
+describe("Qified UnsubscribeMessage Hooks", () => {
+	test("should call beforeUnsubscribeMessage hook before unsubscribing", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		let beforeHookCalled = false;
@@ -313,16 +335,16 @@ describe("Qified Unsubscribe Hooks", () => {
 		const handler = async (_message: Message) => {};
 		await qified.subscribe("test/topic", { id: "testHandler", handler });
 
-		qified.onHook(QifiedHooks.beforeUnsubscribe, async () => {
+		qified.onHook(QifiedHooks.beforeUnsubscribeMessage, async () => {
 			beforeHookCalled = true;
 		});
 
-		await qified.unsubscribe("test/topic", "testHandler");
+		await qified.unsubscribeMessage("test/topic", "testHandler");
 
 		expect(beforeHookCalled).toBe(true);
 	});
 
-	test("should call afterUnsubscribe hook after unsubscribing", async () => {
+	test("should call afterUnsubscribeMessage hook after unsubscribing", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		let afterHookCalled = false;
@@ -330,16 +352,16 @@ describe("Qified Unsubscribe Hooks", () => {
 		const handler = async (_message: Message) => {};
 		await qified.subscribe("test/topic", { id: "testHandler", handler });
 
-		qified.onHook(QifiedHooks.afterUnsubscribe, async () => {
+		qified.onHook(QifiedHooks.afterUnsubscribeMessage, async () => {
 			afterHookCalled = true;
 		});
 
-		await qified.unsubscribe("test/topic", "testHandler");
+		await qified.unsubscribeMessage("test/topic", "testHandler");
 
 		expect(afterHookCalled).toBe(true);
 	});
 
-	test("should allow beforeUnsubscribe hook to modify topic", async () => {
+	test("should allow beforeUnsubscribeMessage hook to modify topic", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 
@@ -348,20 +370,20 @@ describe("Qified Unsubscribe Hooks", () => {
 		await qified.subscribe("topic2", { id: "handler2", handler });
 
 		qified.onHook(
-			QifiedHooks.beforeUnsubscribe,
+			QifiedHooks.beforeUnsubscribeMessage,
 			async (context: { topic: string }) => {
 				context.topic = "topic2";
 			},
 		);
 
-		await qified.unsubscribe("topic1", "handler2");
+		await qified.unsubscribeMessage("topic1", "handler2");
 
 		// topic2 should be unsubscribed, not topic1
 		expect(memoryProvider.subscriptions.get("topic1")?.length).toBe(1);
 		expect(memoryProvider.subscriptions.get("topic2")?.length).toBe(0);
 	});
 
-	test("should allow beforeUnsubscribe hook to modify handler id", async () => {
+	test("should allow beforeUnsubscribeMessage hook to modify handler id", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 
@@ -370,13 +392,13 @@ describe("Qified Unsubscribe Hooks", () => {
 		await qified.subscribe("test/topic", { id: "handler2", handler });
 
 		qified.onHook(
-			QifiedHooks.beforeUnsubscribe,
+			QifiedHooks.beforeUnsubscribeMessage,
 			async (context: { id?: string }) => {
 				context.id = "handler2";
 			},
 		);
 
-		await qified.unsubscribe("test/topic", "handler1");
+		await qified.unsubscribeMessage("test/topic", "handler1");
 
 		// handler2 should be unsubscribed, not handler1
 		const handlers = memoryProvider.subscriptions.get("test/topic");
@@ -384,7 +406,7 @@ describe("Qified Unsubscribe Hooks", () => {
 		expect(handlers?.some((h) => h.id === "handler2")).toBe(false);
 	});
 
-	test("should pass context to afterUnsubscribe hook", async () => {
+	test("should pass context to afterUnsubscribeMessage hook", async () => {
 		const memoryProvider = new MemoryMessageProvider();
 		const qified = new Qified({ messageProviders: [memoryProvider] });
 		let afterHookContext: { topic: string; id?: string } | undefined;
@@ -393,13 +415,13 @@ describe("Qified Unsubscribe Hooks", () => {
 		await qified.subscribe("test/topic", { id: "testHandler", handler });
 
 		qified.onHook(
-			QifiedHooks.afterUnsubscribe,
+			QifiedHooks.afterUnsubscribeMessage,
 			async (context: { topic: string; id?: string }) => {
 				afterHookContext = context;
 			},
 		);
 
-		await qified.unsubscribe("test/topic", "testHandler");
+		await qified.unsubscribeMessage("test/topic", "testHandler");
 
 		expect(afterHookContext?.topic).toBe("test/topic");
 		expect(afterHookContext?.id).toBe("testHandler");
@@ -586,5 +608,268 @@ describe("Qified Hooks Integration", () => {
 		});
 
 		expect(receivedMessage?.data.content).toBe("Hello");
+	});
+});
+
+describe("Qified Enqueue Hooks", () => {
+	test("should call beforeEnqueue hook before enqueueing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let beforeHookCalled = false;
+
+		qified.onHook(QifiedHooks.beforeEnqueue, async () => {
+			beforeHookCalled = true;
+		});
+
+		await qified.enqueue("test/queue", { data: { content: "Hello" } });
+
+		expect(beforeHookCalled).toBe(true);
+	});
+
+	test("should call afterEnqueue hook after enqueueing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let afterHookCalled = false;
+
+		qified.onHook(QifiedHooks.afterEnqueue, async () => {
+			afterHookCalled = true;
+		});
+
+		await qified.enqueue("test/queue", { data: { content: "Hello" } });
+
+		expect(afterHookCalled).toBe(true);
+	});
+
+	test("should allow beforeEnqueue hook to modify queue", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let receivedOnModified = false;
+
+		await qified.dequeue("modified/queue", {
+			id: "h1",
+			handler: async (_task: Task, context: TaskContext) => {
+				receivedOnModified = true;
+				await context.ack();
+			},
+		});
+
+		qified.onHook(
+			QifiedHooks.beforeEnqueue,
+			async (context: { queue: string }) => {
+				context.queue = "modified/queue";
+			},
+		);
+
+		await qified.enqueue("original/queue", { data: { content: "Hello" } });
+
+		expect(receivedOnModified).toBe(true);
+	});
+
+	test("should allow beforeEnqueue hook to modify task data", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let receivedTask: Task | undefined;
+
+		await qified.dequeue("test/queue", {
+			id: "h1",
+			handler: async (task: Task, context: TaskContext) => {
+				receivedTask = task;
+				await context.ack();
+			},
+		});
+
+		qified.onHook(
+			QifiedHooks.beforeEnqueue,
+			async (context: { task: EnqueueTask }) => {
+				context.task.data = { ...context.task.data, modified: true };
+			},
+		);
+
+		await qified.enqueue("test/queue", { data: { original: true } });
+
+		expect(receivedTask?.data.original).toBe(true);
+		expect(receivedTask?.data.modified).toBe(true);
+	});
+
+	test("should pass ids to afterEnqueue hook", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let hookIds: string[] = [];
+
+		qified.onHook(
+			QifiedHooks.afterEnqueue,
+			async (context: { ids: string[] }) => {
+				hookIds = context.ids;
+			},
+		);
+
+		const ids = await qified.enqueue("test/queue", { data: {} });
+
+		expect(hookIds).toEqual(ids);
+		expect(hookIds).toHaveLength(1);
+	});
+});
+
+describe("Qified Dequeue Hooks", () => {
+	test("should call beforeDequeue hook before dequeueing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let beforeHookCalled = false;
+
+		qified.onHook(QifiedHooks.beforeDequeue, async () => {
+			beforeHookCalled = true;
+		});
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "h1", handler });
+
+		expect(beforeHookCalled).toBe(true);
+	});
+
+	test("should call afterDequeue hook after dequeueing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let afterHookCalled = false;
+
+		qified.onHook(QifiedHooks.afterDequeue, async () => {
+			afterHookCalled = true;
+		});
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "h1", handler });
+
+		expect(afterHookCalled).toBe(true);
+	});
+
+	test("should allow beforeDequeue hook to modify queue", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+
+		qified.onHook(
+			QifiedHooks.beforeDequeue,
+			async (context: { queue: string }) => {
+				context.queue = "modified/queue";
+			},
+		);
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("original/queue", { id: "h1", handler });
+
+		expect(taskProvider.taskHandlers.has("modified/queue")).toBe(true);
+		expect(taskProvider.taskHandlers.has("original/queue")).toBe(false);
+	});
+
+	test("should allow beforeDequeue hook to modify handler", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+
+		qified.onHook(
+			QifiedHooks.beforeDequeue,
+			async (context: { handler: TaskHandler }) => {
+				context.handler = {
+					id: "modifiedHandler",
+					handler: context.handler.handler,
+				};
+			},
+		);
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "originalHandler", handler });
+
+		const handlers = taskProvider.taskHandlers.get("test/queue");
+		expect(handlers?.[0].id).toBe("modifiedHandler");
+	});
+});
+
+describe("Qified UnsubscribeTask Hooks", () => {
+	test("should call beforeUnsubscribeTask hook before unsubscribing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let beforeHookCalled = false;
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "h1", handler });
+
+		qified.onHook(QifiedHooks.beforeUnsubscribeTask, async () => {
+			beforeHookCalled = true;
+		});
+
+		await qified.unsubscribeTask("test/queue", "h1");
+
+		expect(beforeHookCalled).toBe(true);
+	});
+
+	test("should call afterUnsubscribeTask hook after unsubscribing", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let afterHookCalled = false;
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "h1", handler });
+
+		qified.onHook(QifiedHooks.afterUnsubscribeTask, async () => {
+			afterHookCalled = true;
+		});
+
+		await qified.unsubscribeTask("test/queue", "h1");
+
+		expect(afterHookCalled).toBe(true);
+	});
+
+	test("should allow beforeUnsubscribeTask hook to modify queue", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("queue1", { id: "a", handler });
+		await qified.dequeue("queue2", { id: "b", handler });
+
+		qified.onHook(
+			QifiedHooks.beforeUnsubscribeTask,
+			async (context: { queue: string }) => {
+				context.queue = "queue2";
+			},
+		);
+
+		await qified.unsubscribeTask("queue1", "b");
+
+		expect(taskProvider.taskHandlers.get("queue1")?.length).toBe(1);
+		expect(taskProvider.taskHandlers.get("queue2")?.length ?? 0).toBe(0);
+	});
+
+	test("should pass context to afterUnsubscribeTask hook", async () => {
+		const taskProvider = new MemoryTaskProvider();
+		const qified = new Qified({ taskProviders: [taskProvider] });
+		let afterHookContext: { queue: string; id?: string } | undefined;
+
+		const handler = async (_task: Task, context: TaskContext) => {
+			await context.ack();
+		};
+		await qified.dequeue("test/queue", { id: "h1", handler });
+
+		qified.onHook(
+			QifiedHooks.afterUnsubscribeTask,
+			async (context: { queue: string; id?: string }) => {
+				afterHookContext = context;
+			},
+		);
+
+		await qified.unsubscribeTask("test/queue", "h1");
+
+		expect(afterHookContext?.queue).toBe("test/queue");
+		expect(afterHookContext?.id).toBe("h1");
 	});
 });
