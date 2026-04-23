@@ -63,8 +63,8 @@ importers:
   packages/rabbitmq:
     dependencies:
       amqplib:
-        specifier: ^1.0.2
-        version: 1.0.2
+        specifier: ^1.0.3
+        version: 1.0.3
       hookified:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1029,8 +1029,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  amqplib@1.0.2:
-    resolution: {integrity: sha512-QFzavIs3FxXA9/PWOiY/j5Arr7KFT0b1TYYsq9f5PyZ3Dv5H5hQXTK3fZTUUzzOo2BF1o/Vk5bHAKzlL40LfDA==}
+  amqplib@1.0.3:
+    resolution: {integrity: sha512-nsrXa59tvX4HPjPPW8JJGuBb/Db0MOq3DOhGdSbIY7bTsQDMV2fmF9c3i74g/8Gt9+QWyrxfEPppOOoV9lK1uQ==}
     engines: {node: '>=18'}
 
   ansi-align@3.0.1:
@@ -3198,7 +3198,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 4.3.6
 
-  amqplib@1.0.2:
+  amqplib@1.0.3:
     dependencies:
       buffer-more-ints: 1.0.0
 
