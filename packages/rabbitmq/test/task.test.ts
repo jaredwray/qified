@@ -232,7 +232,6 @@ describe("RabbitMqTaskProvider", () => {
 			const taskId = await provider.enqueue(testQueue, {
 				data: { message: "test" },
 				headers: { "x-custom": "value" },
-				priority: 10,
 				maxRetries: 5,
 				timeout: 5000,
 			});
@@ -990,7 +989,6 @@ describe("RabbitMqTaskProvider", () => {
 			await provider.enqueue(testQueue, {
 				data: { message: "test", nested: { value: 123 } },
 				headers: { "x-custom": "header-value" },
-				priority: 5,
 			});
 
 			await waitFor(() => receivedTask !== undefined);
@@ -1001,7 +999,6 @@ describe("RabbitMqTaskProvider", () => {
 				nested: { value: 123 },
 			});
 			expect(receivedTask?.headers).toEqual({ "x-custom": "header-value" });
-			expect(receivedTask?.priority).toBe(5);
 			expect(receivedTask?.timestamp).toBeDefined();
 		});
 	});

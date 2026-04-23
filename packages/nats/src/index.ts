@@ -28,10 +28,18 @@ export type NatsMessageProviderOptions = {
 	 * @default "@qified/nats"
 	 */
 	id?: string;
+	/**
+	 * Wait time in seconds between reconnection attempts after a connection loss.
+	 * Set to 0 to disable automatic reconnection entirely.
+	 * The underlying NATS client retries indefinitely while reconnect is enabled.
+	 * @default 5
+	 */
+	reconnectTimeInSeconds?: number;
 };
 
 export const defaultNatsUri = "localhost:4222";
 export const defaultNatsId = "@qified/nats";
+export const defaultReconnectTimeInSeconds = 5;
 
 export class NatsMessageProvider implements MessageProvider {
 	public subscriptions = new Map<string, TopicHandler[]>();
@@ -42,10 +50,13 @@ export class NatsMessageProvider implements MessageProvider {
 	private _connection: NatsConnection | undefined;
 	private _uri: string;
 	private _id: string;
+	private _reconnectTimeInSeconds: number;
 
 	constructor(options: NatsMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultNatsUri;
 		this._id = options.id ?? defaultNatsId;
+		this._reconnectTimeInSeconds =
+			options.reconnectTimeInSeconds ?? defaultReconnectTimeInSeconds;
 	}
 
 	/**
@@ -82,11 +93,34 @@ export class NatsMessageProvider implements MessageProvider {
 	}
 
 	/**
-	 * Creates the NATS client connection.
+	 * Gets the reconnect time in seconds.
+	 * @returns {number} The reconnect time in seconds. 0 means reconnection is disabled.
+	 */
+	public get reconnectTimeInSeconds(): number {
+		return this._reconnectTimeInSeconds;
+	}
+
+	/**
+	 * Sets the reconnect time in seconds.
+	 * @param {number} value The reconnect time in seconds. Set to 0 to disable.
+	 */
+	public set reconnectTimeInSeconds(value: number) {
+		this._reconnectTimeInSeconds = value;
+	}
+
+	/**
+	 * Creates the NATS client connection. The NATS client handles reconnection
+	 * natively — {@link reconnectTimeInSeconds} controls the wait between
+	 * attempts (0 disables it).
 	 * @returns {Promise<void>} A promise that resolves when the connection is made.
 	 */
 	public async createConnection(): Promise<void> {
-		this._connection ??= await connect({ servers: this._uri });
+		this._connection ??= await connect({
+			servers: this._uri,
+			reconnect: this._reconnectTimeInSeconds > 0,
+			reconnectTimeWait: this._reconnectTimeInSeconds * 1000,
+			maxReconnectAttempts: -1,
+		});
 	}
 
 	/**

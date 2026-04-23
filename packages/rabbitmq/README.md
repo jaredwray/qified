@@ -182,7 +182,6 @@ Task data options:
 - `id?`: Custom task ID. Auto-generated if omitted.
 - `timeout?`: Per-task timeout override in milliseconds.
 - `maxRetries?`: Per-task max retry override.
-- `priority?`: Task priority value.
 
 #### dequeue(queue: string, handler: TaskHandler)
 

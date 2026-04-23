@@ -607,4 +607,111 @@ describe("RabbitMqTaskProvider (edge cases requiring mocks)", () => {
 
 		await provider.disconnect(true);
 	});
+
+	test("ctx.reject still nacks the original delivery when republish fails", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		let consumerCallback!: (message: unknown) => Promise<void>;
+		(channel.consume as Mock).mockImplementation(
+			async (_queue: string, cb: (message: unknown) => Promise<void>) => {
+				consumerCallback = cb;
+				return { consumerTag: "ctag-test" };
+			},
+		);
+
+		// Fail every sendToQueue — both the retry republish and any DLQ write.
+		(channel.sendToQueue as Mock).mockImplementation(
+			(
+				_queue: string,
+				_content: Buffer,
+				_options: unknown,
+				callback?: (error: Error | null) => void,
+			) => {
+				callback?.(new Error("broker nack"));
+				return true;
+			},
+		);
+
+		const errors: unknown[] = [];
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+			retries: 3,
+		});
+		provider.on("error", (error: unknown) => {
+			errors.push(error);
+		});
+
+		await provider.dequeue("q-republish-fail", {
+			id: "h1",
+			handler: async (_task, ctx) => {
+				await ctx.reject(true);
+			},
+		});
+
+		const task = { id: "t1", data: { hello: "world" } };
+		const message = {
+			content: Buffer.from(JSON.stringify(task)),
+			properties: {},
+			fields: {},
+		};
+
+		await consumerCallback(message);
+
+		// Broker confirm failed, but the consumer must still nack so prefetch
+		// doesn't stall. The emitted error gives observability.
+		expect(channel.nack).toHaveBeenCalledTimes(1);
+		expect(errors).toHaveLength(1);
+		expect((errors[0] as Error).message).toBe("broker nack");
+
+		await provider.disconnect(true);
+	});
+
+	test("connect() gates concurrent callers through a single connection", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		await Promise.all([
+			provider.connect(),
+			provider.connect(),
+			provider.connect(),
+			provider.connect(),
+		]);
+
+		expect(mockConnect).toHaveBeenCalledTimes(1);
+
+		await provider.disconnect(true);
+	});
+
+	test("close handler clears _connectionPromise so the next connect reconnects", async () => {
+		const channel1 = createMockChannel();
+		const connection1 = createMockConnection(channel1);
+		const channel2 = createMockChannel();
+		const connection2 = createMockConnection(channel2);
+
+		mockConnect
+			.mockResolvedValueOnce(connection1)
+			.mockResolvedValueOnce(connection2);
+
+		const provider = new RabbitMqTaskProvider({
+			reconnectTimeInSeconds: 0,
+		});
+		await provider.connect();
+		expect(mockConnect).toHaveBeenCalledTimes(1);
+
+		// Simulate the connection closing. With reconnectTimeInSeconds=0 there
+		// is no auto-reconnect, so the next connect() must open a fresh one.
+		connection1.emit("close");
+
+		await provider.connect();
+		expect(mockConnect).toHaveBeenCalledTimes(2);
+
+		await provider.disconnect(true);
+	});
 });

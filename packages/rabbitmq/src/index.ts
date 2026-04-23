@@ -58,6 +58,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	private _reconnecting = false;
 	private _closing = false;
 	private _reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+	private _connectionPromise: Promise<void> | null = null;
 
 	/**
 	 * Creates an instance of RabbitMqMessageProvider.
@@ -263,30 +264,47 @@ export class RabbitMqMessageProvider implements MessageProvider {
 			this._connection = undefined;
 		}
 
+		this._connectionPromise = null;
 		this._closing = false;
 	}
 
 	/**
-	 * Establishes a connection to RabbitMQ and creates a channel.
+	 * Establishes a connection to RabbitMQ and creates a confirm channel.
 	 * Attaches error and close listeners for automatic reconnection.
+	 * Concurrent callers are gated by {@link _connectionPromise} so only one
+	 * underlying connection is opened per lifecycle, even under high concurrency.
 	 */
 	private async _connect(): Promise<void> {
-		const connection = await connect(this._uri);
-		this._connection = connection;
-		this._channel = await connection.createConfirmChannel();
+		if (!this._connectionPromise) {
+			this._connectionPromise = (async () => {
+				try {
+					const connection = await connect(this._uri);
+					this._connection = connection;
+					this._channel = await connection.createConfirmChannel();
 
-		connection.on("error", () => {
-			// Connection error emitted — connection is already closing/closed.
-			// The 'close' handler will trigger reconnection.
-		});
+					connection.on("error", () => {
+						// Connection error emitted — connection is already closing/closed.
+						// The 'close' handler will trigger reconnection.
+					});
 
-		connection.on("close", () => {
-			this._channel = undefined;
-			this._connection = undefined;
-			if (!this._closing) {
-				this._scheduleReconnect();
-			}
-		});
+					connection.on("close", () => {
+						this._channel = undefined;
+						this._connection = undefined;
+						// Drop the cached promise so the next caller re-connects
+						// instead of resolving against the dead connection.
+						this._connectionPromise = null;
+						if (!this._closing) {
+							this._scheduleReconnect();
+						}
+					});
+				} catch (error) {
+					this._connectionPromise = null;
+					throw error;
+				}
+			})();
+		}
+
+		return this._connectionPromise;
 	}
 
 	/**
@@ -319,6 +337,8 @@ export class RabbitMqMessageProvider implements MessageProvider {
 		this._reconnecting = true;
 		let failed = false;
 		try {
+			// Reset cached connection promise so _connect opens a fresh one.
+			this._connectionPromise = null;
 			await this._connect();
 
 			// biome-ignore lint/style/noNonNullAssertion: channel is set by _connect
@@ -333,6 +353,7 @@ export class RabbitMqMessageProvider implements MessageProvider {
 			// Reconnection failed — will retry after resetting state
 			this._channel = undefined;
 			this._connection = undefined;
+			this._connectionPromise = null;
 			failed = true;
 		} finally {
 			this._reconnecting = false;
@@ -346,10 +367,13 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	/**
 	 * Sets up a consumer for a topic on the given channel.
 	 * Asserts the queue and registers a message consumer that dispatches to all handlers.
-	 * @param {Channel} channel The channel to set up the consumer on.
+	 * @param {ConfirmChannel} channel The channel to set up the consumer on.
 	 * @param {string} topic The topic to consume from.
 	 */
-	private async _setupConsumer(channel: Channel, topic: string): Promise<void> {
+	private async _setupConsumer(
+		channel: ConfirmChannel,
+		topic: string,
+	): Promise<void> {
 		await channel.assertQueue(topic);
 		const { consumerTag } = await channel.consume(topic, async (message_) => {
 			if (message_) {

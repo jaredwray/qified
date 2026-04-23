@@ -159,6 +159,22 @@ describe("NatsTaskProvider", () => {
 			expect(p.retries).toBe(5);
 		});
 
+		test("should default reconnectTimeInSeconds to 5", () => {
+			const p = new NatsTaskProvider();
+			expect(p.reconnectTimeInSeconds).toBe(5);
+		});
+
+		test("should initialize with custom reconnectTimeInSeconds", () => {
+			const p = new NatsTaskProvider({ reconnectTimeInSeconds: 10 });
+			expect(p.reconnectTimeInSeconds).toBe(10);
+		});
+
+		test("should set reconnectTimeInSeconds via setter", () => {
+			const p = new NatsTaskProvider();
+			p.reconnectTimeInSeconds = 0;
+			expect(p.reconnectTimeInSeconds).toBe(0);
+		});
+
 		test("should initialize with all custom options", () => {
 			const p = new NatsTaskProvider({
 				id: "custom-id",
@@ -232,7 +248,6 @@ describe("NatsTaskProvider", () => {
 			const taskId = await provider.enqueue(testQueue, {
 				data: { message: "test" },
 				headers: { "x-custom": "value" },
-				priority: 10,
 				maxRetries: 5,
 				timeout: 5000,
 			});
@@ -995,7 +1010,6 @@ describe("NatsTaskProvider", () => {
 			await provider.enqueue(testQueue, {
 				data: { message: "test", nested: { value: 123 } },
 				headers: { "x-custom": "header-value" },
-				priority: 5,
 			});
 
 			await waitFor(() => receivedTask !== undefined);
@@ -1006,7 +1020,6 @@ describe("NatsTaskProvider", () => {
 				nested: { value: 123 },
 			});
 			expect(receivedTask?.headers).toEqual({ "x-custom": "header-value" });
-			expect(receivedTask?.priority).toBe(5);
 			expect(receivedTask?.timestamp).toBeDefined();
 		});
 	});

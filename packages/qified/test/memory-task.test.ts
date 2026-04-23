@@ -104,7 +104,6 @@ describe("MemoryTaskProvider", () => {
 			const taskId = await provider.enqueue("test-queue", {
 				data: { message: "test" },
 				headers: { "x-custom": "value" },
-				priority: 10,
 				maxRetries: 5,
 				timeout: 5000,
 			});
@@ -916,7 +915,6 @@ describe("MemoryTaskProvider", () => {
 			await provider.enqueue("test-queue", {
 				data: { message: "test", nested: { value: 123 } },
 				headers: { "x-custom": "header-value" },
-				priority: 5,
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, 50));
@@ -927,7 +925,6 @@ describe("MemoryTaskProvider", () => {
 				nested: { value: 123 },
 			});
 			expect(receivedTask?.headers).toEqual({ "x-custom": "header-value" });
-			expect(receivedTask?.priority).toBe(5);
 			expect(receivedTask?.timestamp).toBeDefined();
 		});
 	});

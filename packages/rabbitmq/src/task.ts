@@ -161,6 +161,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					connection.on("close", () => {
 						this._channel = undefined;
 						this._connection = undefined;
+						// Drop the cached promise so the next connect() opens a fresh
+						// connection instead of returning the already-resolved promise
+						// from the dead connection.
+						this._connectionPromise = null;
 						if (!this._closing) {
 							this._scheduleReconnect();
 						}
@@ -443,11 +447,12 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					} else {
 						await this.moveToDeadLetter(queue, task);
 					}
-
-					nackAmqp();
 				} catch (error) {
-					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
+				} finally {
+					// Always nack the original delivery so prefetch(1) consumers
+					// don't stall when the republish/DLQ write fails.
+					nackAmqp();
 				}
 			},
 			extend: async (ttl: number) => {
@@ -460,9 +465,14 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 						clearTimeout(timeoutHandle);
 					}
 
-					timeoutHandle = setTimeout(() => {
+					timeoutHandle = setTimeout(async () => {
 						if (!acknowledged && !rejected && this._active) {
-							void context.reject(true);
+							try {
+								await context.reject(true);
+							} catch (error) {
+								/* v8 ignore next -- @preserve */
+								this.emit("error", error);
+							}
 						}
 					}, ttl);
 				} catch (error) {
@@ -477,9 +487,14 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		};
 
 		// Set timeout handler
-		timeoutHandle = setTimeout(() => {
+		timeoutHandle = setTimeout(async () => {
 			if (!acknowledged && !rejected && this._active) {
-				void context.reject(true);
+				try {
+					await context.reject(true);
+				} catch (error) {
+					/* v8 ignore next -- @preserve */
+					this.emit("error", error);
+				}
 			}
 		}, timeout);
 

@@ -32,9 +32,25 @@ describe("NATSMessageProvider", () => {
 		expect(provider.id).toBe(customId);
 	});
 
+	test("should default reconnectTimeInSeconds to 5", () => {
+		const provider = new NatsMessageProvider();
+		expect(provider.reconnectTimeInSeconds).toBe(5);
+	});
+
+	test("should honor reconnectTimeInSeconds constructor option", () => {
+		const provider = new NatsMessageProvider({ reconnectTimeInSeconds: 10 });
+		expect(provider.reconnectTimeInSeconds).toBe(10);
+	});
+
+	test("should set reconnectTimeInSeconds via setter", () => {
+		const provider = new NatsMessageProvider();
+		provider.reconnectTimeInSeconds = 0;
+		expect(provider.reconnectTimeInSeconds).toBe(0);
+	});
+
 	test("should publish and receive a message", async () => {
 		const provider = new NatsMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await provider.subscribe("test-topic", {
@@ -57,7 +73,7 @@ describe("NATSMessageProvider", () => {
 
 	test("should unsubscribe handler with id", async () => {
 		const provider = new NatsMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
 		await provider.subscribe("test-topic", {
@@ -97,7 +113,7 @@ describe("NATSMessageProvider", () => {
 
 	test("should unsubscribe all handlers with no id", async () => {
 		const provider = new NatsMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
 		await provider.subscribe("test-topic", {
@@ -134,7 +150,7 @@ describe("NATSMessageProvider", () => {
 
 	test("should not handle in-flight messages after unsubscribing", async () => {
 		const provider = new NatsMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
 		await provider.subscribe("test-topic", {
@@ -184,7 +200,7 @@ describe("NATSMessageProvider", () => {
 	test("should be able to use with Qified", async () => {
 		const provider = new NatsMessageProvider();
 		const qified = new Qified({ messageProviders: [provider] });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await qified.subscribe("test-topic", {
@@ -214,7 +230,7 @@ describe("NATSMessageProvider", () => {
 	test("should set custom provider ID in published messages", async () => {
 		const customId = "custom-nats-provider";
 		const provider = new NatsMessageProvider({ id: customId });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const handlerId = "test-handler";
 
