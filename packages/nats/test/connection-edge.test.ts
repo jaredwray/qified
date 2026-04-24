@@ -116,6 +116,72 @@ describe("NatsMessageProvider (edge cases requiring mocks)", () => {
 		await provider.disconnect();
 	});
 
+	test("createConnection rejects while a disconnect is in flight", async () => {
+		let resolveConnect!: (value: unknown) => void;
+		const pending = new Promise((resolve) => {
+			resolveConnect = resolve;
+		});
+		mockConnect.mockReturnValue(pending);
+
+		const provider = new NatsMessageProvider({ reconnectTimeInSeconds: 0 });
+
+		// Kick off a connect that won't resolve until we say so.
+		const firstConnect = provider.createConnection();
+
+		// disconnect() sets _closing synchronously, then awaits the pending
+		// connect. While it's parked on that await, a concurrent createConnection
+		// must fail fast — otherwise it would race past disconnect's cleanup and
+		// leak a live connection the caller assumes ownership of.
+		const disconnectPromise = provider.disconnect();
+
+		await expect(provider.createConnection()).rejects.toThrow(
+			"Provider is disconnecting",
+		);
+
+		resolveConnect(createMockConnection());
+		await firstConnect;
+		await disconnectPromise;
+	});
+
+	test("subscribe racing a disconnect bails out and leaves no stale entries", async () => {
+		let resolveConnect!: (value: unknown) => void;
+		const pending = new Promise((resolve) => {
+			resolveConnect = resolve;
+		});
+		const connection1 = createMockConnection();
+		const connection2 = createMockConnection();
+		mockConnect.mockReturnValueOnce(pending).mockResolvedValueOnce(connection2);
+
+		const provider = new NatsMessageProvider({ reconnectTimeInSeconds: 0 });
+
+		// subscribe() is parked on createConnection()'s await.
+		const subscribePromise = provider.subscribe("topic-a", {
+			id: "h1",
+			handler: async () => {},
+		});
+
+		// disconnect() sets _closing, then awaits the same connection promise.
+		const disconnectPromise = provider.disconnect();
+
+		// When the connect resolves, both awaits resume. subscribe() must see
+		// _closing=true and refuse to touch subscription state — otherwise it
+		// would leave stale map entries that cause a later subscribe() on the
+		// same topic to skip the real NATS subscription.
+		resolveConnect(connection1);
+		await expect(subscribePromise).rejects.toThrow("Provider is disconnecting");
+		await disconnectPromise;
+
+		expect(provider.subscriptions.size).toBe(0);
+		expect(connection1.subscribe).not.toHaveBeenCalled();
+
+		// Prove the hazard is gone: a new subscribe on the same topic must open
+		// a real NATS subscription on the new connection.
+		await provider.subscribe("topic-a", { id: "h2", handler: async () => {} });
+		expect(connection2.subscribe).toHaveBeenCalledWith("topic-a");
+
+		await provider.disconnect();
+	});
+
 	test("disconnect clears the cached connection promise", async () => {
 		const connection1 = createMockConnection();
 		const connection2 = createMockConnection();

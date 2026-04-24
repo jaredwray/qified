@@ -178,11 +178,20 @@ export class NatsMessageProvider implements MessageProvider {
 	public async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		await this.createConnection();
 
+		// createConnection() can resolve after a concurrent disconnect has fully
+		// torn things down. Bail if so — otherwise we'd touch a nulled
+		// _connection (NPE) or populate maps disconnect has already cleared,
+		// leaving stale entries that cause a later subscribe() on the same topic
+		// to skip the real NATS subscription.
+		const connection = this._connection;
+		if (!connection || this._closing) {
+			throw new Error("Provider is disconnecting");
+		}
+
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
 
-			// biome-ignore lint/style/noNonNullAssertion: this is safe as we ensure the connection is created before use
-			const sub = this._connection!.subscribe(topic);
+			const sub = connection.subscribe(topic);
 
 			this._subscriptions.set(topic, sub);
 
@@ -227,7 +236,6 @@ export class NatsMessageProvider implements MessageProvider {
 	 */
 	public async disconnect(): Promise<void> {
 		this._closing = true;
-		this.subscriptions.clear();
 
 		// If a connection attempt is in flight, wait for it so we can close the
 		// connection it opens — otherwise it would complete after disconnect()
@@ -243,6 +251,14 @@ export class NatsMessageProvider implements MessageProvider {
 		await this._connection?.close();
 		this._connection = undefined;
 		this._connectionPromise = null;
+
+		// Clear subscription state after the connection is fully closed. A
+		// subscribe() racing this disconnect can resume mid-close() and
+		// repopulate the maps; clearing here ensures we leave no stale entries
+		// that would short-circuit a later subscribe() on the same topic.
+		this.subscriptions.clear();
+		this._subscriptions.clear();
+
 		this._closing = false;
 	}
 }
