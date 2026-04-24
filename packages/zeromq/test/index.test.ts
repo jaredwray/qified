@@ -15,7 +15,7 @@ describe("ZmqMessageProvider", () => {
 
 	test("should publish and receive a message", async () => {
 		const provider = new ZmqMessageProvider();
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await provider.subscribe("test-topic", {
@@ -46,7 +46,7 @@ describe("ZmqMessageProvider", () => {
 
 	test("should unsubscribe all handlers with no id", async () => {
 		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5558" });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received1: Message | undefined;
 		let received2: Message | undefined;
 		await provider.subscribe("test-topic", {
@@ -90,7 +90,7 @@ describe("ZmqMessageProvider", () => {
 	test("should be able to use with Qified", async () => {
 		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5556" });
 		const qified = new Qified({ messageProviders: [provider] });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const id = "test-handler";
 		await qified.subscribe("test-topic", {
@@ -131,7 +131,7 @@ describe("ZmqMessageProvider", () => {
 			uri: "tcp://localhost:5557",
 			id: customId,
 		});
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 		const handlerId = "test-handler";
 

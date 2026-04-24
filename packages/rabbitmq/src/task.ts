@@ -161,6 +161,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					connection.on("close", () => {
 						this._channel = undefined;
 						this._connection = undefined;
+						// Drop the cached promise so the next connect() opens a fresh
+						// connection instead of returning the already-resolved promise
+						// from the dead connection.
+						this._connectionPromise = null;
 						if (!this._closing) {
 							this._scheduleReconnect();
 						}
@@ -363,10 +367,10 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 					}
 				};
 
-				const nackAmqp = () => {
+				const nackAmqp = (requeue: boolean) => {
 					if (!amqpHandled) {
 						amqpHandled = true;
-						channel.nack(message_, false, false);
+						channel.nack(message_, false, requeue);
 					}
 				};
 				const isAmqpHandled = () => amqpHandled;
@@ -399,7 +403,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		task: Task,
 		handler: TaskHandler,
 		ackAmqp: () => void,
-		nackAmqp: () => void,
+		nackAmqp: (requeue: boolean) => void,
 		isAmqpHandled: () => boolean,
 	): Promise<void> {
 		const maxRetries = task.maxRetries ?? this._retries;
@@ -437,6 +441,7 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 				}
 
 				rejected = true;
+				let republished = false;
 				try {
 					if (requeue && currentAttempt < maxRetries) {
 						await this.publishTask(queue, task);
@@ -444,10 +449,15 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 						await this.moveToDeadLetter(queue, task);
 					}
 
-					nackAmqp();
+					republished = true;
 				} catch (error) {
-					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
+				} finally {
+					// If the republish/DLQ write succeeded, discard the original
+					// delivery — a new copy was persisted. If it failed, requeue
+					// the original so the broker can redeliver and we don't
+					// permanently lose the task on a transient confirm error.
+					nackAmqp(!republished);
 				}
 			},
 			extend: async (ttl: number) => {
@@ -460,9 +470,14 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 						clearTimeout(timeoutHandle);
 					}
 
-					timeoutHandle = setTimeout(() => {
+					timeoutHandle = setTimeout(async () => {
 						if (!acknowledged && !rejected && this._active) {
-							void context.reject(true);
+							try {
+								await context.reject(true);
+							} catch (error) {
+								/* v8 ignore next -- @preserve */
+								this.emit("error", error);
+							}
 						}
 					}, ttl);
 				} catch (error) {
@@ -477,9 +492,14 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		};
 
 		// Set timeout handler
-		timeoutHandle = setTimeout(() => {
+		timeoutHandle = setTimeout(async () => {
 			if (!acknowledged && !rejected && this._active) {
-				void context.reject(true);
+				try {
+					await context.reject(true);
+				} catch (error) {
+					/* v8 ignore next -- @preserve */
+					this.emit("error", error);
+				}
 			}
 		}, timeout);
 

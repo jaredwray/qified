@@ -487,9 +487,14 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 					if (timeoutHandle) {
 						clearTimeout(timeoutHandle);
 					}
-					timeoutHandle = setTimeout(() => {
+					timeoutHandle = setTimeout(async () => {
 						if (!acknowledged && !rejected && this._active) {
-							void context.reject(true);
+							try {
+								await context.reject(true);
+							} catch (error) {
+								/* v8 ignore next -- @preserve */
+								this.emit("error", error);
+							}
 						}
 					}, ttl);
 				} catch (error) {
@@ -504,9 +509,14 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		/* v8 ignore stop */
 
 		// Set timeout handler
-		timeoutHandle = setTimeout(() => {
+		timeoutHandle = setTimeout(async () => {
 			if (!acknowledged && !rejected && this._active) {
-				void context.reject(true);
+				try {
+					await context.reject(true);
+				} catch (error) {
+					/* v8 ignore next -- @preserve */
+					this.emit("error", error);
+				}
 			}
 		}, timeout);
 

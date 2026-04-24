@@ -19,6 +19,13 @@ export type NatsTaskProviderOptions = TaskProviderOptions & {
 	uri?: string;
 	/** Unique identifier for this provider instance. Defaults to "@qified/nats-task" */
 	id?: string;
+	/**
+	 * Wait time in seconds between reconnection attempts after a connection loss.
+	 * Set to 0 to disable automatic reconnection entirely.
+	 * The underlying NATS client retries indefinitely while reconnect is enabled.
+	 * @default 5
+	 */
+	reconnectTimeInSeconds?: number;
 };
 
 /** Default NATS server URI */
@@ -32,6 +39,9 @@ export const defaultTimeout = 30_000;
 
 /** Default maximum retry attempts */
 export const defaultRetries = 3;
+
+/** Default reconnect time in seconds */
+export const defaultReconnectTimeInSeconds = 5;
 
 /**
  * Converts a queue name to a valid JetStream stream name.
@@ -75,6 +85,7 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 
 	private _connection: NatsConnection | undefined;
 	private _uri: string;
+	private _reconnectTimeInSeconds: number;
 	private _connectionPromise: Promise<void> | null = null;
 
 	private _active = true;
@@ -100,7 +111,25 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		this._id = options.id ?? defaultNatsTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
 		this._retries = options.retries ?? defaultRetries;
+		this._reconnectTimeInSeconds =
+			options.reconnectTimeInSeconds ?? defaultReconnectTimeInSeconds;
 		this._taskHandlers = new Map();
+	}
+
+	/**
+	 * Gets the reconnect time in seconds.
+	 * @returns {number} The reconnect time in seconds. 0 means reconnection is disabled.
+	 */
+	public get reconnectTimeInSeconds(): number {
+		return this._reconnectTimeInSeconds;
+	}
+
+	/**
+	 * Sets the reconnect time in seconds.
+	 * @param {number} value The reconnect time in seconds. Set to 0 to disable.
+	 */
+	public set reconnectTimeInSeconds(value: number) {
+		this._reconnectTimeInSeconds = value;
 	}
 
 	/**
@@ -169,6 +198,9 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 				try {
 					this._connection = await connect({
 						servers: this._uri,
+						reconnect: this._reconnectTimeInSeconds > 0,
+						reconnectTimeWait: this._reconnectTimeInSeconds * 1000,
+						maxReconnectAttempts: -1,
 					});
 				} catch (error) {
 					this._connectionPromise = null;
@@ -484,9 +516,14 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 						clearTimeout(timeoutHandle);
 					}
 
-					timeoutHandle = setTimeout(() => {
+					timeoutHandle = setTimeout(async () => {
 						if (!acknowledged && !rejected && this._active) {
-							void context.reject(true);
+							try {
+								await context.reject(true);
+							} catch (error) {
+								/* v8 ignore next -- @preserve */
+								this.emit("error", error);
+							}
 						}
 					}, ttl);
 					/* v8 ignore stop */
@@ -503,9 +540,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 
 		// Set timeout handler
 		/* v8 ignore start -- @preserve */
-		timeoutHandle = setTimeout(() => {
+		timeoutHandle = setTimeout(async () => {
 			if (!acknowledged && !rejected && this._active) {
-				void context.reject(true);
+				try {
+					await context.reject(true);
+				} catch (error) {
+					this.emit("error", error);
+				}
 			}
 		}, timeout);
 		/* v8 ignore stop */

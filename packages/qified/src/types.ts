@@ -10,9 +10,12 @@ export type Message<T = any> = {
 	 */
 	id: string;
 	/**
-	 * the provider that passed the message
+	 * The id of the provider that delivered this message.
+	 * Set by the provider before delivery — always present on received messages.
+	 * Producers should publish with `Omit<Message, "providerId">`; the provider
+	 * assigns this field.
 	 */
-	providerId?: string;
+	providerId: string;
 	/**
 	 * The data of the message
 	 * @type {<T = any>}
@@ -108,13 +111,6 @@ export type Task<T = any> = {
 	 * @type {Record<string, string>}
 	 */
 	headers?: Record<string, string>;
-
-	/**
-	 * Priority of the task (higher numbers = higher priority)
-	 * @type {number}
-	 * @default 0
-	 */
-	priority?: number;
 
 	/**
 	 * Maximum number of retry attempts

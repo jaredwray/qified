@@ -57,7 +57,10 @@ describe("MemoryMessageProvider", () => {
 
 	test("should publish a message to the correct topic", async () => {
 		const provider = new MemoryMessageProvider();
-		const message: Message = { id: "foo", data: { test: "message" } };
+		const message: Omit<Message, "providerId"> = {
+			id: "foo",
+			data: { test: "message" },
+		};
 		let handlerMessage: Message | undefined;
 		const handler = async (msg: Message) => {
 			handlerMessage = msg;
@@ -97,7 +100,10 @@ describe("MemoryMessageProvider", () => {
 	test("should set custom provider ID in published messages", async () => {
 		const customId = "custom-memory-provider";
 		const provider = new MemoryMessageProvider({ id: customId });
-		const message: Message = { id: "foo", data: { test: "message" } };
+		const message: Omit<Message, "providerId"> = {
+			id: "foo",
+			data: { test: "message" },
+		};
 		let handlerMessage: Message | undefined;
 		const handler = async (msg: Message) => {
 			handlerMessage = msg;

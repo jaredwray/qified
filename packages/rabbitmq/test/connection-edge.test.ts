@@ -65,7 +65,7 @@ afterEach(() => {
 });
 
 describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
-	test("should reconnect when connection exists but channel is undefined", async () => {
+	test("should re-open a fresh connection after the previous one closes", async () => {
 		const channel1 = createMockChannel();
 		const connection1 = createMockConnection(channel1);
 		const channel2 = createMockChannel();
@@ -78,19 +78,44 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 		const provider = new RabbitMqMessageProvider({
 			reconnectTimeInSeconds: 0,
 		});
-		await provider.getClient();
+		const first = await provider.getClient();
+		expect(first).toBe(channel1);
 
-		// Clear only the channel but keep the connection
-		const internal = provider as unknown as {
-			_connection: unknown;
-			_channel: unknown;
-		};
-		internal._channel = undefined;
-		expect(internal._connection).toBe(connection1);
+		// Simulate the connection closing spontaneously. The close handler
+		// should clear the cached _connectionPromise so the next getClient()
+		// opens a fresh connection instead of resolving against the dead one.
+		connection1.emit("close");
 
-		const result = await provider.getClient();
-		expect(result).toBe(channel2);
+		const second = await provider.getClient();
+		expect(second).toBe(channel2);
 		expect(mockConnect).toHaveBeenCalledTimes(2);
+
+		await provider.disconnect();
+	});
+
+	test("should gate concurrent getClient() calls through a single connect", async () => {
+		const channel = createMockChannel();
+		const connection = createMockConnection(channel);
+		mockConnect.mockResolvedValue(connection);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		// Fire many concurrent calls before any have resolved — all must
+		// resolve against the same underlying connect() call.
+		const results = await Promise.all([
+			provider.getClient(),
+			provider.getClient(),
+			provider.getClient(),
+			provider.getClient(),
+			provider.getClient(),
+		]);
+
+		expect(mockConnect).toHaveBeenCalledTimes(1);
+		for (const result of results) {
+			expect(result).toBe(channel);
+		}
 
 		await provider.disconnect();
 	});
@@ -264,6 +289,37 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 			// Reset _closing so cleanup works even if assertion fails
 			(provider as unknown as { _closing: boolean })._closing = false;
 		}
+	});
+
+	test("should reconnect against the new URI after the uri setter is used", async () => {
+		const channel1 = createMockChannel();
+		const connection1 = createMockConnection(channel1);
+		const channel2 = createMockChannel();
+		const connection2 = createMockConnection(channel2);
+
+		mockConnect
+			.mockResolvedValueOnce(connection1)
+			.mockResolvedValueOnce(connection2);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+		const first = await provider.getClient();
+		expect(first).toBe(channel1);
+		expect(mockConnect).toHaveBeenCalledWith("amqp://localhost:5672");
+
+		// Change the URI. The setter clears _connection/_channel; it must also
+		// drop the cached _connectionPromise so the next getClient() opens a
+		// fresh connection against the new URI instead of short-circuiting to
+		// the already-resolved promise (which would return undefined channel).
+		provider.uri = "amqp://new-host:5672";
+
+		const second = await provider.getClient();
+		expect(second).toBe(channel2);
+		expect(mockConnect).toHaveBeenCalledTimes(2);
+		expect(mockConnect).toHaveBeenLastCalledWith("amqp://new-host:5672");
+
+		await provider.disconnect();
 	});
 
 	test("should handle connection error event gracefully", async () => {

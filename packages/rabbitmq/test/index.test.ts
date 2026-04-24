@@ -123,7 +123,7 @@ describe("RabbitMqMessageProvider", () => {
 	test("should publish and receive a message", async () => {
 		const topic = `${topicPrefix}-pub-recv`;
 		const provider = createProvider();
-		const message: Message = { id: "1", data: "hello" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "hello" };
 		let received: Message | undefined;
 
 		await provider.subscribe(topic, {
@@ -424,7 +424,7 @@ describe("RabbitMqMessageProvider", () => {
 		const topic = `${topicPrefix}-qified`;
 		const provider = createProvider();
 		const qified = new Qified({ messageProviders: [provider] });
-		const message: Message = { id: "1", data: "test" };
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
 		let received: Message | undefined;
 
 		await qified.subscribe(topic, {
