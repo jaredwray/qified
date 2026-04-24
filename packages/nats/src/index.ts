@@ -52,6 +52,7 @@ export class NatsMessageProvider implements MessageProvider {
 	private _id: string;
 	private _reconnectTimeInSeconds: number;
 	private _connectionPromise: Promise<void> | null = null;
+	private _closing = false;
 
 	constructor(options: NatsMessageProviderOptions = {}) {
 		this._uri = options.uri ?? defaultNatsUri;
@@ -122,6 +123,12 @@ export class NatsMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the connection is made.
 	 */
 	public async createConnection(): Promise<void> {
+		if (this._closing) {
+			// Refuse to start a new connection while disconnect() is in progress;
+			// otherwise it would resolve after disconnect returns and leak.
+			throw new Error("Provider is disconnecting");
+		}
+
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
 				try {
@@ -219,11 +226,24 @@ export class NatsMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the disconnection is complete.
 	 */
 	public async disconnect(): Promise<void> {
+		this._closing = true;
 		this.subscriptions.clear();
+
+		// If a connection attempt is in flight, wait for it so we can close the
+		// connection it opens — otherwise it would complete after disconnect()
+		// returns and leak a live connection.
+		if (this._connectionPromise) {
+			try {
+				await this._connectionPromise;
+			} catch {
+				// Connect rejected — nothing to close.
+			}
+		}
 
 		await this._connection?.close();
 		this._connection = undefined;
 		this._connectionPromise = null;
+		this._closing = false;
 	}
 }
 
