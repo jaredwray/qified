@@ -146,6 +146,13 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 	 * Connects to RabbitMQ. Can be called explicitly or will be called automatically on first use.
 	 */
 	async connect(): Promise<void> {
+		if (!this._active) {
+			// disconnect() sets _active=false permanently, so any later connect()
+			// would open a socket that enqueue/dequeue already refuse to use —
+			// a quiet connection leak. Rejecting here keeps the contract coherent.
+			throw new Error("TaskProvider has been disconnected");
+		}
+
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
 				try {
@@ -617,6 +624,17 @@ export class RabbitMqTaskProvider extends Hookified implements TaskProvider {
 		if (this._reconnectTimer) {
 			clearTimeout(this._reconnectTimer);
 			this._reconnectTimer = undefined;
+		}
+
+		// If a connection attempt is in flight, wait for it so we can close the
+		// connection it opens — otherwise it would complete after disconnect()
+		// returns and leak a live connection.
+		if (this._connectionPromise) {
+			try {
+				await this._connectionPromise;
+			} catch {
+				// Connect rejected — nothing to close.
+			}
 		}
 
 		// Clear handlers and in-memory state

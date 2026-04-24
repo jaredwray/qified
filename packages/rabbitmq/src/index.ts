@@ -250,6 +250,17 @@ export class RabbitMqMessageProvider implements MessageProvider {
 			this._reconnectTimer = undefined;
 		}
 
+		// If a connection attempt is in flight, wait for it so we can close the
+		// connection it opens — otherwise it would complete after disconnect()
+		// returns and leak a live connection.
+		if (this._connectionPromise) {
+			try {
+				await this._connectionPromise;
+			} catch {
+				// Connect rejected — nothing to close.
+			}
+		}
+
 		if (this._channel) {
 			const channel = this._channel;
 			for (const tag of this._consumerTags.values()) {
@@ -278,6 +289,12 @@ export class RabbitMqMessageProvider implements MessageProvider {
 	 * underlying connection is opened per lifecycle, even under high concurrency.
 	 */
 	private async _connect(): Promise<void> {
+		if (this._closing) {
+			// Refuse to start a new connection while disconnect() is in progress;
+			// otherwise it would resolve after disconnect returns and leak.
+			throw new Error("Provider is disconnecting");
+		}
+
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
 				try {

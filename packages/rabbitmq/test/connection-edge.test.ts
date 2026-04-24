@@ -322,6 +322,36 @@ describe("RabbitMqMessageProvider (edge cases requiring mocks)", () => {
 		await provider.disconnect();
 	});
 
+	test("getClient rejects while a disconnect is in flight", async () => {
+		let resolveConnect!: (value: unknown) => void;
+		const pending = new Promise((resolve) => {
+			resolveConnect = resolve;
+		});
+		mockConnect.mockReturnValue(pending);
+
+		const provider = new RabbitMqMessageProvider({
+			reconnectTimeInSeconds: 0,
+		});
+
+		// Kick off a connect that won't resolve until we say so.
+		const firstGet = provider.getClient();
+
+		// disconnect() sets _closing synchronously, then awaits the pending
+		// connect. While it's parked on that await, a concurrent getClient must
+		// fail fast — otherwise it would race past disconnect's cleanup and leak
+		// a live connection the caller assumes ownership of.
+		const disconnectPromise = provider.disconnect();
+
+		await expect(provider.getClient()).rejects.toThrow(
+			"Provider is disconnecting",
+		);
+
+		const channel = createMockChannel();
+		resolveConnect(createMockConnection(channel));
+		await firstGet;
+		await disconnectPromise;
+	});
+
 	test("should handle connection error event gracefully", async () => {
 		vi.useFakeTimers();
 

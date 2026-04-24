@@ -192,6 +192,13 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 	 * Connects to NATS. Can be called explicitly or will be called automatically on first use.
 	 */
 	async connect(): Promise<void> {
+		if (!this._active) {
+			// disconnect() sets _active=false permanently, so any later connect()
+			// would open a socket that enqueue/dequeue already refuse to use —
+			// a quiet connection leak. Rejecting here keeps the contract coherent.
+			throw new Error("TaskProvider has been disconnected");
+		}
+
 		/* v8 ignore next -- @preserve */
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
@@ -628,6 +635,17 @@ export class NatsTaskProvider extends Hookified implements TaskProvider {
 		}
 
 		this._consumeAbortControllers.clear();
+
+		// If a connection attempt is in flight, wait for it so we can close the
+		// connection it opens — otherwise it would complete after disconnect()
+		// returns and leak a live connection.
+		if (this._connectionPromise) {
+			try {
+				await this._connectionPromise;
+			} catch {
+				// Connect rejected — nothing to close.
+			}
+		}
 
 		// Clear handlers and in-memory state
 		this._taskHandlers.clear();

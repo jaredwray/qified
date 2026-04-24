@@ -131,8 +131,18 @@ describe("NatsTaskProvider", () => {
 
 		customProviders.length = 0;
 
-		await provider.clearQueue(testQueue);
-		await provider.disconnect();
+		// Tests may have already disconnected provider; tolerate that here.
+		try {
+			await provider.clearQueue(testQueue);
+		} catch {
+			/* ignore — provider already disconnected */
+		}
+
+		try {
+			await provider.disconnect();
+		} catch {
+			/* ignore — already disconnected */
+		}
 	});
 
 	describe("constructor and initialization", () => {
@@ -189,6 +199,16 @@ describe("NatsTaskProvider", () => {
 		test("should fail to connect when NATS is not available", async () => {
 			const p = new NatsTaskProvider({ uri: "localhost:9999" });
 			await expect(p.connect()).rejects.toThrow();
+		});
+
+		test("connect rejects after disconnect", async () => {
+			const p = new NatsTaskProvider();
+			// disconnect sets _active=false permanently; a later connect must
+			// refuse rather than open a socket enqueue/dequeue would ignore.
+			await p.disconnect();
+			await expect(p.connect()).rejects.toThrow(
+				"TaskProvider has been disconnected",
+			);
 		});
 	});
 
