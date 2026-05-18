@@ -66,18 +66,14 @@ importers:
   packages/rabbitmq:
     dependencies:
       amqplib:
-        specifier: ^1.0.3
-        version: 1.2.0
+        specifier: ^2.0.1
+        version: 2.0.1
       hookified:
         specifier: ^2.1.1
         version: 2.2.0
       qified:
         specifier: workspace:^
         version: link:../qified
-    devDependencies:
-      '@types/amqplib':
-        specifier: ^0.10.8
-        version: 0.10.8
 
   packages/redis:
     dependencies:
@@ -738,9 +734,6 @@ packages:
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
 
-  '@types/amqplib@0.10.8':
-    resolution: {integrity: sha512-vtDp8Pk1wsE/AuQ8/Rgtm6KUZYqcnTgNvEHwzCkX8rL7AGsC6zqAfKAAJhUZXFhM/Pp++tbnUHiam/8vVpPztA==}
-
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -852,8 +845,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  amqplib@1.2.0:
-    resolution: {integrity: sha512-WVvkHAaL848/zjpJXXnN/80nPhCrwxlXWQFHTRDjbEGkwaKK+Ht+8iAC4LeKEzQTOJKxNnUGVLNy/70iFHkeEg==}
+  amqplib@2.0.1:
+    resolution: {integrity: sha512-a3P2MgfCf9nzVis12VxWEn0dS6hcqve7dlEAhXDtIWR27BlhtMkILOc+H9aeHjDi6i6r94dYKc2Kx2OFe3avvg==}
     engines: {node: '>=18'}
 
   ansi-align@3.0.1:
@@ -929,9 +922,6 @@ packages:
   braces@3.0.3:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
-
-  buffer-more-ints@1.0.0:
-    resolution: {integrity: sha512-EMetuGFz5SLsT0QTnXzINh4Ksr+oo4i+UGTXEshiGCQWnsgSs7ZhJ8fzlwQ+OzEMs0MpDAMr1hxnblp5a4vcHg==}
 
   bytes@3.0.0:
     resolution: {integrity: sha512-pMhOfFDPiv9t5jjIXkHosWmkSyQbvsgEVNkz0ERHbuLh2T/7j4Mqqpz523Fe8MVY89KC6Sh/QfS2sM+SjgFDcw==}
@@ -2870,10 +2860,6 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@types/amqplib@0.10.8':
-    dependencies:
-      '@types/node': 25.6.2
-
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2992,9 +2978,7 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 4.4.3
 
-  amqplib@1.2.0:
-    dependencies:
-      buffer-more-ints: 1.0.0
+  amqplib@2.0.1: {}
 
   ansi-align@3.0.1:
     dependencies:
@@ -3068,8 +3052,6 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
-
-  buffer-more-ints@1.0.0: {}
 
   bytes@3.0.0: {}
 
