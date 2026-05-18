@@ -1,12 +1,30 @@
 packages:
   - packages/*
 
-minimumReleaseAge: 2880
+# Transitive-dep pins for security advisories.
+# @ungap/structured-clone <1.3.1 — CWE-502 deserialization fix.
+overrides:
+  "@ungap/structured-clone": ">=1.3.1"
+
+# Supply-chain controls — see jaredwray/agentic defense-in-depth-nodejs.md § 4
+minimumReleaseAge: 10080 # 7 days, in minutes
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
+blockExoticSubdeps: true
+strictDepBuilds: true
+dangerouslyAllowAllBuilds: false
+trustPolicy: no-downgrade
 
 minimumReleaseAgeExclude:
   - hookified
 
-onlyBuiltDependencies:
-  - esbuild
-  - unrs-resolver
-  - zeromq
+# Trust-policy carve-outs for jaredwray-owned packages whose newer releases
+# legitimately stopped emitting npm provenance.
+trustPolicyExclude:
+  - writr
+
+# Approved build scripts — code-reviewed allowlist (replaces onlyBuiltDependencies)
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+  zeromq: true

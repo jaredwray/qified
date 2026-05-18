@@ -4,7 +4,7 @@ Guidelines for AI coding agents (Claude, Gemini, Codex).
 
 ## Project
 
-Qified is a task and message queue library with multiple providers, built with TypeScript and Node.js (>=20). This is a monorepo containing:
+Qified is a task and message queue library with multiple providers, built with TypeScript and Node.js (>=22). This is a monorepo containing:
 
 - `qified` - Core package with in-memory provider
 - `@qified/redis` - Redis provider
