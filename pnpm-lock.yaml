@@ -74,10 +74,6 @@ importers:
       qified:
         specifier: workspace:^
         version: link:../qified
-    devDependencies:
-      '@types/amqplib':
-        specifier: ^0.10.8
-        version: 0.10.8
 
   packages/redis:
     dependencies:
@@ -737,9 +733,6 @@ packages:
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
-
-  '@types/amqplib@0.10.8':
-    resolution: {integrity: sha512-vtDp8Pk1wsE/AuQ8/Rgtm6KUZYqcnTgNvEHwzCkX8rL7AGsC6zqAfKAAJhUZXFhM/Pp++tbnUHiam/8vVpPztA==}
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
@@ -2866,10 +2859,6 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
-
-  '@types/amqplib@0.10.8':
-    dependencies:
-      '@types/node': 25.6.2
 
   '@types/chai@5.2.3':
     dependencies:

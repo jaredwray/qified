@@ -39,9 +39,6 @@
   "peerDependencies": {
     "qified": "workspace:^"
   },
-  "devDependencies": {
-    "@types/amqplib": "^0.10.8"
-  },
   "files": [
     "dist",
     "LICENSE"
