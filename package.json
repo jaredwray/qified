@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499",
   "engines": {
-    "node": ">=22"
+    "node": "^22.18.0 || >=24.0.0"
   },
   "type": "module",
   "description": "Qified Mono Repo",
@@ -30,7 +30,7 @@
     "@vitest/coverage-v8": "^4.1.5",
     "docula": "^1.14.0",
     "rimraf": "^6.1.3",
-    "tsdown": "^0.21.9",
+    "tsdown": "^0.22.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
