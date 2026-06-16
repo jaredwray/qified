@@ -5,11 +5,12 @@ on:
   release:
     types: [released]
 
+# OIDC trusted publishing to npm requires id-token: write so the job can mint
+# the OIDC token that npm exchanges for a short-lived publish credential. No
+# long-lived NPM_TOKEN is needed and provenance attestations are generated.
 permissions:
   contents: read
-
-env:
-  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  id-token: write
 
 jobs:
   build:
@@ -29,7 +30,7 @@ jobs:
     - name: Install Dependencies
       run: pnpm install --frozen-lockfile
 
-    - name: Build    
+    - name: Build
       run: pnpm build
 
     - name: Test Services
@@ -41,13 +42,5 @@ jobs:
     - name: Testing
       run: pnpm test
 
-    - name: create npmrc
-      run: |
-        echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-        echo "always-auth=true" >> ~/.npmrc
-
     - name: Publish
-      run: |
-        pnpm publish:packages
-        
-
+      run: pnpm publish:packages
