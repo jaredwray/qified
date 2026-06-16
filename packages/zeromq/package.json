@@ -21,7 +21,7 @@
     "test:ci": "biome check --error-on-warnings && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
     "build": "tsdown src/index.ts --format esm --format cjs --dts",
-    "build:publish": "pnpm build && pnpm publish --access public --no-git-checks",
+    "build:publish": "pnpm build && pnpm publish --provenance --access public --no-git-checks",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
@@ -30,6 +30,11 @@
     "message",
     "provider"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaredwray/qified.git",
+    "directory": "packages/zeromq"
+  },
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
