@@ -38,9 +38,9 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@nats-io/jetstream": "^3.3.1",
-    "@nats-io/transport-node": "^3.3.1",
-    "hookified": "^2.1.1"
+    "@nats-io/jetstream": "^3.4.0",
+    "@nats-io/transport-node": "^3.4.0",
+    "hookified": "^3.0.0"
   },
   "peerDependencies": {
     "qified": "workspace:^"
