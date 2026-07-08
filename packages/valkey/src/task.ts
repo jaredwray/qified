@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Hookified } from "hookified";
+import { Redis } from "iovalkey";
 import type {
 	EnqueueTask,
 	Task,
@@ -8,25 +9,24 @@ import type {
 	TaskProvider,
 	TaskProviderOptions,
 } from "qified";
-import { createClient, type RedisClientType } from "redis";
 
 /**
- * Configuration options for the Redis task provider.
+ * Configuration options for the Valkey task provider.
  */
-export type RedisTaskProviderOptions = TaskProviderOptions & {
-	/** Redis connection URI. Defaults to "redis://localhost:6379" */
+export type ValkeyTaskProviderOptions = TaskProviderOptions & {
+	/** Valkey connection URI. Defaults to "redis://localhost:6380" */
 	uri?: string;
-	/** Unique identifier for this provider instance. Defaults to "@qified/redis-task" */
+	/** Unique identifier for this provider instance. Defaults to "@qified/valkey-task" */
 	id?: string;
 	/** Poll interval in milliseconds for checking timed-out tasks. Defaults to 1000 */
 	pollInterval?: number;
 };
 
-/** Default Redis connection URI */
-export const defaultRedisUri = "redis://localhost:6379";
+/** Default Valkey connection URI */
+export const defaultValkeyUri = "redis://localhost:6380";
 
-/** Default Redis task provider identifier */
-export const defaultRedisTaskId = "@qified/redis-task";
+/** Default Valkey task provider identifier */
+export const defaultValkeyTaskId = "@qified/valkey-task";
 
 /** Default timeout for task processing (30 seconds) */
 export const defaultTimeout = 30000;
@@ -49,7 +49,7 @@ export const defaultPollInterval = 1000;
  * Returns nil when nothing claimable, else [taskId, taskJson, attempt, fence].
  *
  * The per-task keys are built from ARGV[1] because the id is unknown until RPOP;
- * this is safe on standalone/Sentinel Redis/Valkey but not on Cluster.
+ * this is safe on standalone/Sentinel Valkey/Redis but not on Cluster.
  */
 const CLAIM_SCRIPT = `
 local t = redis.call('TIME')
@@ -165,8 +165,8 @@ return 1
 `;
 
 /**
- * Redis-based task provider for Qified.
- * Uses Redis lists and sorted sets to enable reliable task queue processing
+ * Valkey-based task provider for Qified.
+ * Uses Valkey lists and sorted sets to enable reliable task queue processing
  * across multiple instances with visibility timeout, retries, and dead-letter queues.
  * Extends Hookified to emit events for errors and other lifecycle events.
  *
@@ -184,30 +184,32 @@ return 1
  * - Standalone/Sentinel only: the claim script builds per-task keys from a prefix
  *   and the key schema is not Redis Cluster compatible.
  */
-export class RedisTaskProvider extends Hookified implements TaskProvider {
+export class ValkeyTaskProvider extends Hookified implements TaskProvider {
 	private _id: string;
 	private _timeout: number;
 	private _retries: number;
 	private _taskHandlers: Map<string, TaskHandler[]>;
-	private _client: RedisClientType;
+	private _uri: string;
+	private _client: Redis;
 	private _connectionPromise: Promise<void> | null = null;
 	private _active = true;
 	private _pollInterval: number;
 	private _pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
 	/**
-	 * Creates a new Redis task provider instance.
+	 * Creates a new Valkey task provider instance.
 	 * @param options Configuration options for the provider
 	 */
-	constructor(options: RedisTaskProviderOptions = {}) {
+	constructor(options: ValkeyTaskProviderOptions = {}) {
 		super();
-		const uri = options.uri ?? defaultRedisUri;
-		this._id = options.id ?? defaultRedisTaskId;
+		const uri = options.uri ?? defaultValkeyUri;
+		this._id = options.id ?? defaultValkeyTaskId;
 		this._timeout = options.timeout ?? defaultTimeout;
 		this._retries = options.retries ?? defaultRetries;
 		this._pollInterval = options.pollInterval ?? defaultPollInterval;
 		this._taskHandlers = new Map();
-		this._client = createClient({ url: uri });
+		this._uri = uri;
+		this._client = new Redis(uri, { lazyConnect: true });
 	}
 
 	/**
@@ -267,15 +269,23 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
-	 * Connects to Redis. Can be called explicitly or will be called automatically on first use.
+	 * Connects to Valkey. Can be called explicitly or will be called automatically on first use.
 	 */
 	async connect(): Promise<void> {
 		if (!this._connectionPromise) {
 			this._connectionPromise = (async () => {
 				try {
+					// A Valkey client cannot be reopened once it has connected and
+					// closed, so use a fresh client whenever we are reconnecting.
+					if (this._client.status !== "wait") {
+						this._client = new Redis(this._uri, { lazyConnect: true });
+					}
 					await this._client.connect();
 				} catch (error) {
 					this._connectionPromise = null;
+					// Stop the default reconnect loop so a failed connection does not
+					// leave background retry timers running.
+					this._client.disconnect();
 					throw error;
 				}
 			})();
@@ -286,56 +296,56 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	/**
 	 * Returns the connected client, connecting if necessary.
 	 */
-	private async getClient(): Promise<RedisClientType> {
+	private async getClient(): Promise<Redis> {
 		await this.connect();
 		return this._client;
 	}
 
 	/**
 	 * Generates a globally unique task ID using UUID.
-	 * This ensures uniqueness across multiple RedisTaskProvider instances.
+	 * This ensures uniqueness across multiple ValkeyTaskProvider instances.
 	 */
 	private generateTaskId(): string {
 		return `task-${randomUUID()}`;
 	}
 
 	/**
-	 * Gets the Redis key for the task queue list.
+	 * Gets the Valkey key for the task queue list.
 	 */
 	private getQueueKey(queue: string): string {
 		return `${queue}:tasks`;
 	}
 
 	/**
-	 * Gets the Redis key for processing tasks sorted set.
+	 * Gets the Valkey key for processing tasks sorted set.
 	 */
 	private getProcessingKey(queue: string): string {
 		return `${queue}:processing`;
 	}
 
 	/**
-	 * Gets the Redis key for dead-letter queue.
+	 * Gets the Valkey key for dead-letter queue.
 	 */
 	private getDeadLetterKey(queue: string): string {
 		return `${queue}:dead-letter`;
 	}
 
 	/**
-	 * Gets the Redis key for task data.
+	 * Gets the Valkey key for task data.
 	 */
 	private getTaskDataKey(queue: string, taskId: string): string {
 		return `${queue}:task:${taskId}`;
 	}
 
 	/**
-	 * Gets the Redis key for task attempt count.
+	 * Gets the Valkey key for task attempt count.
 	 */
 	private getTaskAttemptKey(queue: string, taskId: string): string {
 		return `${queue}:task:${taskId}:attempt`;
 	}
 
 	/**
-	 * Gets the Redis key for the task fence token, used to detect stale
+	 * Gets the Valkey key for the task fence token, used to detect stale
 	 * operations from a delivery that has lost ownership of the task.
 	 */
 	private getTaskFenceKey(queue: string, taskId: string): string {
@@ -376,7 +386,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		await client.set(this.getTaskAttemptKey(queue, task.id), "0");
 
 		// Add to queue list (LPUSH for FIFO with RPOP)
-		await client.lPush(this.getQueueKey(queue), task.id);
+		await client.lpush(this.getQueueKey(queue), task.id);
 
 		// Process immediately if handlers are registered
 		void this.processQueue(queue);
@@ -450,7 +460,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		// Advisory scan for tasks whose deadline has passed. RECOVER re-checks
 		// expiry against the server clock before acting, so a fast/slow local
 		// clock only affects recovery latency, never correctness.
-		const timedOutTasks = await client.zRangeByScore(
+		const timedOutTasks = await client.zrangebyscore(
 			this.getProcessingKey(queue),
 			0,
 			now - 1,
@@ -466,7 +476,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			const taskDataStr = await client.get(this.getTaskDataKey(queue, taskId));
 			if (!taskDataStr) {
 				// Task data missing; drop the orphaned processing entry and counters.
-				await client.zRem(this.getProcessingKey(queue), taskId);
+				await client.zrem(this.getProcessingKey(queue), taskId);
 				await client.del(this.getTaskAttemptKey(queue, taskId));
 				await client.del(this.getTaskFenceKey(queue, taskId));
 				continue;
@@ -477,16 +487,17 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 
 			// Atomically recover the task: re-verify expiry, invalidate the stale
 			// owner's fence token, and requeue or dead-letter it.
-			await client.eval(RECOVER_SCRIPT, {
-				keys: [
-					this.getProcessingKey(queue),
-					this.getQueueKey(queue),
-					this.getDeadLetterKey(queue),
-					this.getTaskAttemptKey(queue, taskId),
-					this.getTaskFenceKey(queue, taskId),
-				],
-				arguments: [taskId, String(maxRetries)],
-			});
+			await client.eval(
+				RECOVER_SCRIPT,
+				5,
+				this.getProcessingKey(queue),
+				this.getQueueKey(queue),
+				this.getDeadLetterKey(queue),
+				this.getTaskAttemptKey(queue, taskId),
+				this.getTaskFenceKey(queue, taskId),
+				taskId,
+				String(maxRetries),
+			);
 		}
 	}
 
@@ -515,10 +526,14 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		// attempt and fence) so a crash can never leave it in neither structure.
 		let reply: [string, string, number, string] | null;
 		try {
-			reply = (await client.eval(CLAIM_SCRIPT, {
-				keys: [this.getQueueKey(queue), this.getProcessingKey(queue)],
-				arguments: [this.getTaskKeyPrefix(queue), String(this._timeout)],
-			})) as unknown as [string, string, number, string] | null;
+			reply = (await client.eval(
+				CLAIM_SCRIPT,
+				2,
+				this.getQueueKey(queue),
+				this.getProcessingKey(queue),
+				this.getTaskKeyPrefix(queue),
+				String(this._timeout),
+			)) as [string, string, number, string] | null;
 		} catch (error) {
 			/* v8 ignore start -- @preserve */
 			this.emit("error", error);
@@ -584,21 +599,19 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				try {
 					// Remove from processing and requeue or dead-letter, but only
 					// if this delivery still owns the task (fence token matches).
-					await client.eval(REJECT_SCRIPT, {
-						keys: [
-							this.getProcessingKey(queue),
-							this.getQueueKey(queue),
-							this.getDeadLetterKey(queue),
-							this.getTaskAttemptKey(queue, task.id),
-							this.getTaskFenceKey(queue, task.id),
-						],
-						arguments: [
-							token,
-							task.id,
-							requeue ? "1" : "0",
-							String(maxRetries),
-						],
-					});
+					await client.eval(
+						REJECT_SCRIPT,
+						5,
+						this.getProcessingKey(queue),
+						this.getQueueKey(queue),
+						this.getDeadLetterKey(queue),
+						this.getTaskAttemptKey(queue, task.id),
+						this.getTaskFenceKey(queue, task.id),
+						token,
+						task.id,
+						requeue ? "1" : "0",
+						String(maxRetries),
+					);
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
@@ -610,13 +623,15 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				}
 				try {
 					// Extend the deadline only if this delivery still owns the task.
-					await client.eval(EXTEND_SCRIPT, {
-						keys: [
-							this.getProcessingKey(queue),
-							this.getTaskFenceKey(queue, task.id),
-						],
-						arguments: [token, task.id, String(ttl)],
-					});
+					await client.eval(
+						EXTEND_SCRIPT,
+						2,
+						this.getProcessingKey(queue),
+						this.getTaskFenceKey(queue, task.id),
+						token,
+						task.id,
+						String(ttl),
+					);
 					// Reset timeout handle
 					/* v8 ignore start -- @preserve */
 					if (timeoutHandle) {
@@ -690,15 +705,16 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	): Promise<void> {
 		const client = await this.getClient();
 
-		await client.eval(ACK_SCRIPT, {
-			keys: [
-				this.getProcessingKey(queue),
-				this.getTaskDataKey(queue, taskId),
-				this.getTaskAttemptKey(queue, taskId),
-				this.getTaskFenceKey(queue, taskId),
-			],
-			arguments: [token, taskId],
-		});
+		await client.eval(
+			ACK_SCRIPT,
+			4,
+			this.getProcessingKey(queue),
+			this.getTaskDataKey(queue, taskId),
+			this.getTaskAttemptKey(queue, taskId),
+			this.getTaskFenceKey(queue, taskId),
+			token,
+			taskId,
+		);
 	}
 
 	/**
@@ -748,17 +764,17 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		// Clear handlers
 		this._taskHandlers.clear();
 
-		// Disconnect from Redis
+		// Disconnect from Valkey
 		if (this._connectionPromise) {
 			await this._connectionPromise;
 
 			if (force) {
-				if (this._client.isOpen) {
-					this._client.destroy();
-				}
+				this._client.disconnect();
 			} else {
-				if (this._client.isOpen) {
-					await this._client.close();
+				try {
+					await this._client.quit();
+				} catch {
+					// The connection is already closing or closed; nothing to do.
 				}
 			}
 
@@ -773,7 +789,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	 */
 	public async getDeadLetterTasks(queue: string): Promise<Task[]> {
 		const client = await this.getClient();
-		const taskIds = await client.lRange(this.getDeadLetterKey(queue), 0, -1);
+		const taskIds = await client.lrange(this.getDeadLetterKey(queue), 0, -1);
 
 		const tasks: Task[] = [];
 		for (const taskId of taskIds) {
@@ -800,9 +816,9 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		const client = await this.getClient();
 
 		const [waiting, processing, deadLetter] = await Promise.all([
-			client.lLen(this.getQueueKey(queue)),
-			client.zCard(this.getProcessingKey(queue)),
-			client.lLen(this.getDeadLetterKey(queue)),
+			client.llen(this.getQueueKey(queue)),
+			client.zcard(this.getProcessingKey(queue)),
+			client.llen(this.getDeadLetterKey(queue)),
 		]);
 
 		return {
@@ -821,9 +837,9 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 
 		// Get all task IDs from all locations
 		const [queueTasks, processingTasks, deadLetterTasks] = await Promise.all([
-			client.lRange(this.getQueueKey(queue), 0, -1),
-			client.zRange(this.getProcessingKey(queue), 0, -1),
-			client.lRange(this.getDeadLetterKey(queue), 0, -1),
+			client.lrange(this.getQueueKey(queue), 0, -1),
+			client.zrange(this.getProcessingKey(queue), 0, -1),
+			client.lrange(this.getDeadLetterKey(queue), 0, -1),
 		]);
 
 		const allTaskIds = [...queueTasks, ...processingTasks, ...deadLetterTasks];

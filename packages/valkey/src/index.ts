@@ -1,49 +1,49 @@
+import { Redis } from "iovalkey";
 import {
 	type Message,
 	type MessageProvider,
 	Qified,
 	type TopicHandler,
 } from "qified";
-import { createClient, type RedisClientType } from "redis";
 
 export {
 	defaultPollInterval,
-	defaultRedisTaskId,
 	defaultRetries as defaultTaskRetries,
 	defaultTimeout as defaultTaskTimeout,
-	RedisTaskProvider,
-	type RedisTaskProviderOptions,
+	defaultValkeyTaskId,
+	ValkeyTaskProvider,
+	type ValkeyTaskProviderOptions,
 } from "./task.js";
 
 /**
- * Configuration options for the Redis message provider.
+ * Configuration options for the Valkey message provider.
  */
-export type RedisMessageProviderOptions = {
-	/** Redis connection URI. Defaults to "redis://localhost:6379" */
+export type ValkeyMessageProviderOptions = {
+	/** Valkey connection URI. Defaults to "redis://localhost:6380" */
 	uri?: string;
-	/** Unique identifier for this provider instance. Defaults to "@qified/redis" */
+	/** Unique identifier for this provider instance. Defaults to "@qified/valkey" */
 	id?: string;
 };
 
-/** Default Redis connection URI */
-export const defaultRedisUri = "redis://localhost:6379";
+/** Default Valkey connection URI */
+export const defaultValkeyUri = "redis://localhost:6380";
 
-/** Default Redis provider identifier */
-export const defaultRedisId = "@qified/redis";
+/** Default Valkey provider identifier */
+export const defaultValkeyId = "@qified/valkey";
 
 /**
- * Redis-based message provider for Qified.
- * Uses Redis pub/sub to enable message distribution across multiple instances.
+ * Valkey-based message provider for Qified.
+ * Uses Valkey pub/sub to enable message distribution across multiple instances.
  */
-export class RedisMessageProvider implements MessageProvider {
+export class ValkeyMessageProvider implements MessageProvider {
 	/** Map of topic names to their registered handlers */
 	public subscriptions = new Map<string, TopicHandler[]>();
 
-	/** Redis client used for publishing messages */
-	private readonly pub: RedisClientType;
+	/** Valkey client used for publishing messages */
+	private readonly pub: Redis;
 
-	/** Redis client used for subscribing to messages */
-	private readonly sub: RedisClientType;
+	/** Valkey client used for subscribing to messages */
+	private readonly sub: Redis;
 
 	/** Connection promise to ensure connect is only called once */
 	private connectionPromise: Promise<void> | null = null;
@@ -51,25 +51,50 @@ export class RedisMessageProvider implements MessageProvider {
 	private _id: string;
 
 	/**
-	 * Creates a new Redis message provider instance.
+	 * Creates a new Valkey message provider instance.
 	 * @param options Configuration options for the provider
 	 */
-	constructor(options: RedisMessageProviderOptions = {}) {
-		const uri = options.uri ?? defaultRedisUri;
-		this._id = options.id ?? defaultRedisId;
-		this.pub = createClient({ url: uri });
+	constructor(options: ValkeyMessageProviderOptions = {}) {
+		const uri = options.uri ?? defaultValkeyUri;
+		this._id = options.id ?? defaultValkeyId;
+		this.pub = new Redis(uri, { lazyConnect: true });
 		this.sub = this.pub.duplicate();
+		// The subscriber connection delivers every channel's messages through a
+		// single "message" event, so wire the listener once and route by channel.
+		this.sub.on("message", (channel: string, raw: string) => {
+			try {
+				const message = JSON.parse(raw) as Message;
+				/* v8 ignore next -- @preserve */
+				const handlers = this.subscriptions.get(channel) ?? [];
+				void Promise.all(
+					handlers.map(async (sub) => sub.handler(message)),
+				).catch(() => {
+					// Ignore handler failures to prevent unhandled rejections.
+				});
+			} catch {
+				// Ignore malformed messages to prevent process crashes.
+			}
+		});
 	}
 
 	/**
-	 * Connects to Redis. Can be called explicitly or will be called automatically on first use.
+	 * Connects to Valkey. Can be called explicitly or will be called automatically on first use.
 	 * @throws Error if connection fails
 	 */
 	async connect(): Promise<void> {
 		if (!this.connectionPromise) {
 			this.connectionPromise = (async () => {
-				await this.pub.connect();
-				await this.sub.connect();
+				try {
+					await this.pub.connect();
+					await this.sub.connect();
+				} catch (error) {
+					this.connectionPromise = null;
+					// Stop the default reconnect loop so a failed connection does not
+					// leave background retry timers running.
+					this.pub.disconnect();
+					this.sub.disconnect();
+					throw error;
+				}
 			})();
 		}
 		return this.connectionPromise;
@@ -79,7 +104,7 @@ export class RedisMessageProvider implements MessageProvider {
 	 * Returns the connected publish client, connecting if necessary.
 	 * @private
 	 */
-	private async getPubClient(): Promise<RedisClientType> {
+	private async getPubClient(): Promise<Redis> {
 		await this.connect();
 		return this.pub;
 	}
@@ -88,7 +113,7 @@ export class RedisMessageProvider implements MessageProvider {
 	 * Returns the connected subscribe client, connecting if necessary.
 	 * @private
 	 */
-	private async getSubClient(): Promise<RedisClientType> {
+	private async getSubClient(): Promise<Redis> {
 		await this.connect();
 		return this.sub;
 	}
@@ -134,18 +159,7 @@ export class RedisMessageProvider implements MessageProvider {
 			this.subscriptions.set(topic, []);
 			try {
 				const subClient = await this.getSubClient();
-				await subClient.subscribe(topic, async (raw) => {
-					try {
-						const message = JSON.parse(raw) as Message;
-						/* v8 ignore next -- @preserve */
-						const handlers = this.subscriptions.get(topic) ?? [];
-						await Promise.all(
-							handlers.map(async (sub) => sub.handler(message)),
-						);
-					} catch {
-						// Ignore malformed messages to prevent process crashes.
-					}
-				});
+				await subClient.subscribe(topic);
 			} catch (error) {
 				// Roll back the topic entry so a later retry re-subscribes
 				// instead of only appending a handler locally.
@@ -180,7 +194,7 @@ export class RedisMessageProvider implements MessageProvider {
 	}
 
 	/**
-	 * Disconnects from Redis, unsubscribing from all topics and closing connections.
+	 * Disconnects from Valkey, unsubscribing from all topics and closing connections.
 	 * @param force If true, forcefully terminates the connection without sending a quit command. Defaults to false.
 	 */
 	async disconnect(force = false): Promise<void> {
@@ -191,27 +205,27 @@ export class RedisMessageProvider implements MessageProvider {
 
 			const topics = [...this.subscriptions.keys()];
 			if (topics.length > 0) {
-				await this.sub.unsubscribe(topics);
+				await this.sub.unsubscribe(...topics);
 			}
 
 			this.subscriptions.clear();
 
 			/* v8 ignore start -- @preserve */
 			if (force) {
-				if (this.pub.isOpen) {
-					this.pub.destroy();
+				if (this.pub.status !== "end") {
+					this.pub.disconnect();
 				}
 
-				if (this.sub.isOpen) {
-					this.sub.destroy();
+				if (this.sub.status !== "end") {
+					this.sub.disconnect();
 				}
 			} else {
-				if (this.pub.isOpen) {
-					await this.pub.close();
+				if (this.pub.status === "ready") {
+					await this.pub.quit();
 				}
 
-				if (this.sub.isOpen) {
-					await this.sub.close();
+				if (this.sub.status === "ready") {
+					await this.sub.quit();
 				}
 			}
 			/* v8 ignore stop */
@@ -222,11 +236,11 @@ export class RedisMessageProvider implements MessageProvider {
 }
 
 /**
- * Creates a new instance of Qified with a Redis message provider.
- * @param {RedisMessageProviderOptions} options Optional configuration for the Redis message provider.
+ * Creates a new instance of Qified with a Valkey message provider.
+ * @param {ValkeyMessageProviderOptions} options Optional configuration for the Valkey message provider.
  * @returns A new instance of Qified.
  */
-export function createQified(options?: RedisMessageProviderOptions): Qified {
-	const provider = new RedisMessageProvider(options);
+export function createQified(options?: ValkeyMessageProviderOptions): Qified {
+	const provider = new ValkeyMessageProvider(options);
 	return new Qified({ messageProviders: [provider] });
 }

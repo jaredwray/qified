@@ -3,26 +3,26 @@
 import type { Task, TaskContext, TaskHandler } from "qified";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
-	defaultRedisTaskId,
 	defaultTaskRetries,
 	defaultTaskTimeout,
-	RedisTaskProvider,
+	defaultValkeyTaskId,
+	ValkeyTaskProvider,
 } from "../src/index.js";
 
-describe("RedisTaskProvider", () => {
-	let provider: RedisTaskProvider;
+describe("ValkeyTaskProvider", () => {
+	let provider: ValkeyTaskProvider;
 	const testQueue = `test-queue-${Date.now()}`;
 
 	describe("hookified inheritance", () => {
 		test("should extend Hookified and support event emission", () => {
-			const p = new RedisTaskProvider();
+			const p = new ValkeyTaskProvider();
 			expect(typeof p.on).toBe("function");
 			expect(typeof p.emit).toBe("function");
 			expect(typeof p.off).toBe("function");
 		});
 
-		test("should emit error events when Redis operations fail in ack", async () => {
-			const customProvider = new RedisTaskProvider();
+		test("should emit error events when Valkey operations fail in ack", async () => {
+			const customProvider = new ValkeyTaskProvider();
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -49,7 +49,7 @@ describe("RedisTaskProvider", () => {
 			await customProvider.disconnect();
 
 			// Create a new provider to verify error listener support
-			const p2 = new RedisTaskProvider();
+			const p2 = new ValkeyTaskProvider();
 			await p2.connect();
 			await p2.clearQueue(testQueue);
 
@@ -65,10 +65,10 @@ describe("RedisTaskProvider", () => {
 			await p2.disconnect();
 		});
 
-		test("should emit error events during polling when Redis fails", async () => {
-			const customProvider = new RedisTaskProvider({
+		test("should emit error events during polling when Valkey fails", async () => {
+			const customProvider = new ValkeyTaskProvider({
 				pollInterval: 50,
-				uri: "redis://localhost:6379",
+				uri: "redis://localhost:6380",
 			});
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
@@ -96,19 +96,19 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should support onHook and removeHook from Hookified", () => {
-			const p = new RedisTaskProvider();
+			const p = new ValkeyTaskProvider();
 			expect(typeof p.onHook).toBe("function");
 			expect(typeof p.removeHook).toBe("function");
 		});
 
 		test("should support once method from Hookified", () => {
-			const p = new RedisTaskProvider();
+			const p = new ValkeyTaskProvider();
 			expect(typeof p.once).toBe("function");
 		});
 	});
 
 	beforeEach(async () => {
-		provider = new RedisTaskProvider();
+		provider = new ValkeyTaskProvider();
 		provider.throwOnEmptyListeners = false;
 		await provider.connect();
 		await provider.clearQueue(testQueue);
@@ -121,30 +121,30 @@ describe("RedisTaskProvider", () => {
 
 	describe("constructor and initialization", () => {
 		test("should initialize with default values", () => {
-			const p = new RedisTaskProvider();
-			expect(p.id).toBe(defaultRedisTaskId);
+			const p = new ValkeyTaskProvider();
+			expect(p.id).toBe(defaultValkeyTaskId);
 			expect(p.timeout).toBe(defaultTaskTimeout);
 			expect(p.retries).toBe(defaultTaskRetries);
 			expect(p.taskHandlers).toEqual(new Map());
 		});
 
 		test("should initialize with custom id", () => {
-			const customProvider = new RedisTaskProvider({ id: "custom-id" });
+			const customProvider = new ValkeyTaskProvider({ id: "custom-id" });
 			expect(customProvider.id).toBe("custom-id");
 		});
 
 		test("should initialize with custom timeout", () => {
-			const customProvider = new RedisTaskProvider({ timeout: 5000 });
+			const customProvider = new ValkeyTaskProvider({ timeout: 5000 });
 			expect(customProvider.timeout).toBe(5000);
 		});
 
 		test("should initialize with custom retries", () => {
-			const customProvider = new RedisTaskProvider({ retries: 5 });
+			const customProvider = new ValkeyTaskProvider({ retries: 5 });
 			expect(customProvider.retries).toBe(5);
 		});
 
 		test("should initialize with all custom options", () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				id: "custom-id",
 				timeout: 5000,
 				retries: 5,
@@ -155,8 +155,8 @@ describe("RedisTaskProvider", () => {
 			expect(customProvider.retries).toBe(5);
 		});
 
-		test("should fail to connect when Redis is not available", async () => {
-			const p = new RedisTaskProvider({ uri: "redis://localhost:9999" });
+		test("should fail to connect when Valkey is not available", async () => {
+			const p = new ValkeyTaskProvider({ uri: "redis://localhost:9999" });
 			await expect(p.connect()).rejects.toThrow();
 		});
 	});
@@ -361,7 +361,7 @@ describe("RedisTaskProvider", () => {
 
 	describe("task rejection and retry", () => {
 		test("should reject and requeue task on failure", async () => {
-			const customProvider = new RedisTaskProvider({ pollInterval: 100 });
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 100 });
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -391,7 +391,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should move to dead-letter queue after max retries", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				retries: 2,
 				pollInterval: 100,
 			});
@@ -464,7 +464,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should auto-reject task on handler error", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				retries: 3,
 				pollInterval: 100,
 			});
@@ -499,7 +499,7 @@ describe("RedisTaskProvider", () => {
 
 	describe("task timeout", () => {
 		test("should timeout task after configured timeout", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 100,
 				pollInterval: 50,
 			});
@@ -537,7 +537,7 @@ describe("RedisTaskProvider", () => {
 
 	describe("task context extend", () => {
 		test("should extend task deadline", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 200,
 				pollInterval: 50,
 			});
@@ -730,7 +730,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should force disconnect and destroy connections", async () => {
-			const p = new RedisTaskProvider();
+			const p = new ValkeyTaskProvider();
 			await p.connect();
 
 			const handler: TaskHandler = {
@@ -739,7 +739,7 @@ describe("RedisTaskProvider", () => {
 			};
 			await p.dequeue(testQueue, handler);
 
-			// Force disconnect should call destroy() instead of close()
+			// Force disconnect should call disconnect() instead of quit()
 			await p.disconnect(true);
 			expect(p.taskHandlers.size).toBe(0);
 		});
@@ -948,7 +948,7 @@ describe("RedisTaskProvider", () => {
 	describe("edge cases and coverage", () => {
 		test("should handle timed out tasks via background polling", async () => {
 			// This test covers checkTimedOutTasks (lines 335-366)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 50,
 				retries: 2,
 				pollInterval: 30,
@@ -983,7 +983,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle disconnect during timed out task processing", async () => {
 			// This test covers early return in checkTimedOutTasks (lines 321, 335)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 20,
 				pollInterval: 30,
 			});
@@ -1020,7 +1020,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle polling loop exit when inactive", async () => {
 			// This test covers line 269 (early return in poll when _active is false)
-			const customProvider = new RedisTaskProvider({ pollInterval: 20 });
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 20 });
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1044,13 +1044,13 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle task data missing during processing", async () => {
 			// This test covers line 421 (task data missing, skip)
-			const customProvider = new RedisTaskProvider({ pollInterval: 50 });
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 50 });
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
 			// Manually add a task ID to the queue without task data
 			const client = (customProvider as any)._client;
-			await client.lPush(`${testQueue}:tasks`, "orphan-task-id");
+			await client.lpush(`${testQueue}:tasks`, "orphan-task-id");
 
 			let handlerCalled = false;
 			await customProvider.dequeue(testQueue, {
@@ -1073,7 +1073,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle extended timeout expiration triggering reject", async () => {
 			// This test covers lines 515-516 (extended timeout firing)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 5000,
 				pollInterval: 50,
 			});
@@ -1114,7 +1114,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle processQueue when _active becomes false after getClient", async () => {
 			// This test covers line 376 (early return after getClient when _active is false)
-			const customProvider = new RedisTaskProvider({ pollInterval: 30 });
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 30 });
 			customProvider.throwOnEmptyListeners = false;
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
@@ -1142,7 +1142,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should move timed out task to DLQ when max retries exceeded", async () => {
 			// This test specifically covers lines 364-366 (move to DLQ in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 30,
 				retries: 1,
 				pollInterval: 20,
@@ -1178,7 +1178,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle missing task data in checkTimedOutTasks", async () => {
 			// This test covers lines 346-349 (task data missing cleanup in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 30,
 				pollInterval: 20,
 			});
@@ -1188,10 +1188,11 @@ describe("RedisTaskProvider", () => {
 			// Manually add a task ID to processing set without task data
 			const client = (customProvider as any)._client;
 			const processingKey = `${testQueue}:processing`;
-			await client.zAdd(processingKey, {
-				score: Date.now() - 100,
-				value: "orphan-processing-task",
-			});
+			await client.zadd(
+				processingKey,
+				Date.now() - 100,
+				"orphan-processing-task",
+			);
 
 			// Register handler to start polling
 			await customProvider.dequeue(testQueue, {
@@ -1203,7 +1204,7 @@ describe("RedisTaskProvider", () => {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
 			// The orphan task should have been cleaned up from processing set
-			const processingCount = await client.zCard(processingKey);
+			const processingCount = await client.zcard(processingKey);
 			expect(processingCount).toBe(0);
 
 			await customProvider.clearQueue(testQueue);
@@ -1212,7 +1213,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should requeue timed out task when retries remaining via polling", async () => {
 			// This test covers lines 361-363 (requeue for retry in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 30,
 				retries: 5,
 				pollInterval: 20,
@@ -1251,7 +1252,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should move timed out task to DLQ via checkTimedOutTasks when retries exhausted", async () => {
 			// This test specifically targets line 366 (DLQ move in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 20,
 				retries: 1, // Only 1 retry allowed
 				pollInterval: 15,
@@ -1274,10 +1275,7 @@ describe("RedisTaskProvider", () => {
 			// Set attempt count to max retries (already tried once)
 			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
 			// Add to processing with expired deadline
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() - 1000, // Already expired
-				value: taskId,
-			});
+			await client.zadd(`${testQueue}:processing`, Date.now() - 1000, taskId);
 
 			// Register handler to start polling (which will run checkTimedOutTasks)
 			await customProvider.dequeue(testQueue, {
@@ -1299,7 +1297,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should requeue timed out task via checkTimedOutTasks when retries remaining", async () => {
 			// This test specifically targets lines 361-363 (requeue in checkTimedOutTasks)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 20,
 				retries: 5,
 				pollInterval: 15,
@@ -1322,10 +1320,7 @@ describe("RedisTaskProvider", () => {
 			// Set attempt count to less than max retries
 			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
 			// Add to processing with expired deadline
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() - 1000, // Already expired
-				value: taskId,
-			});
+			await client.zadd(`${testQueue}:processing`, Date.now() - 1000, taskId);
 
 			// Register handler to start polling
 			let handlerCalled = false;
@@ -1348,7 +1343,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle extend resetting existing timeout handle", async () => {
 			// Covers lines 485-489 (reset timeout in extend when timeoutHandle exists)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 200,
 				pollInterval: 50,
 			});
@@ -1383,7 +1378,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should auto-reject and clear timeout on handler error", async () => {
 			// Covers lines 520-524 (catch block auto-reject + finally clearing timeout)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				retries: 1,
 				pollInterval: 50,
 			});
@@ -1421,7 +1416,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should force disconnect with destroy", async () => {
 			// Covers lines 601-604 (force disconnect path)
-			const customProvider = new RedisTaskProvider();
+			const customProvider = new ValkeyTaskProvider();
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1433,7 +1428,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle disconnect when not connected", async () => {
 			// Covers line 598 (connectionPromise is null)
-			const customProvider = new RedisTaskProvider();
+			const customProvider = new ValkeyTaskProvider();
 
 			// Disconnect without ever connecting - should not throw
 			await customProvider.disconnect();
@@ -1443,13 +1438,13 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle force disconnect when client is already closed", async () => {
 			// Covers lines 602-604 (force disconnect when client not open)
-			const customProvider = new RedisTaskProvider();
+			const customProvider = new ValkeyTaskProvider();
 			await customProvider.connect();
 
 			// Close normally first
 			const client = (customProvider as any)._client;
-			if (client.isOpen) {
-				await client.close();
+			if (client.status === "ready") {
+				await client.quit();
 			}
 
 			// Force disconnect when already closed - should not throw
@@ -1460,13 +1455,13 @@ describe("RedisTaskProvider", () => {
 
 		test("should handle graceful disconnect when client is already closed", async () => {
 			// Covers lines 606-608 (graceful disconnect when client not open)
-			const customProvider = new RedisTaskProvider();
+			const customProvider = new ValkeyTaskProvider();
 			await customProvider.connect();
 
 			// Close the client directly
 			const client = (customProvider as any)._client;
-			if (client.isOpen) {
-				await client.close();
+			if (client.status === "ready") {
+				await client.quit();
 			}
 
 			// Graceful disconnect when already closed - should not throw
@@ -1477,7 +1472,7 @@ describe("RedisTaskProvider", () => {
 
 		test("should return tasks from dead-letter queue", async () => {
 			// Covers lines 620-627 (getDeadLetterTasks iteration)
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				retries: 1,
 				pollInterval: 50,
 			});
@@ -1514,7 +1509,7 @@ describe("RedisTaskProvider", () => {
 
 	describe("fencing and distributed safety", () => {
 		test("should ignore a stale ack after the fence token changes", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 60000,
 				pollInterval: 60000,
 			});
@@ -1549,7 +1544,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should ignore a stale reject after the fence token changes", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 60000,
 				pollInterval: 60000,
 			});
@@ -1584,7 +1579,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should ignore a stale extend after the fence token changes", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 60000,
 				pollInterval: 60000,
 			});
@@ -1596,13 +1591,13 @@ describe("RedisTaskProvider", () => {
 			const handler: TaskHandler = {
 				id: "test-handler",
 				handler: async (task: Task, ctx: TaskContext) => {
-					const before = await client.zScore(
+					const before = await client.zscore(
 						`${testQueue}:processing`,
 						task.id,
 					);
 					await client.incr(`${testQueue}:task:${task.id}:fence`);
 					await ctx.extend(120000);
-					const after = await client.zScore(`${testQueue}:processing`, task.id);
+					const after = await client.zscore(`${testQueue}:processing`, task.id);
 					// A stale extend must not move the deadline.
 					expect(after).toBe(before);
 					completed = true;
@@ -1620,7 +1615,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should let the first finalizer win across multiple handlers", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				timeout: 60000,
 				pollInterval: 60000,
 			});
@@ -1663,7 +1658,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should recover a timed-out task and invalidate the stale owner", async () => {
-			const customProvider = new RedisTaskProvider({
+			const customProvider = new ValkeyTaskProvider({
 				pollInterval: 25,
 				retries: 3,
 			});
@@ -1680,10 +1675,7 @@ describe("RedisTaskProvider", () => {
 			await client.set(`${testQueue}:task:${taskId}:attempt`, "0");
 			await client.set(`${testQueue}:task:${taskId}:fence`, "1");
 			// Already-expired processing entry owned by a now-dead worker.
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() - 1000,
-				value: taskId,
-			});
+			await client.zadd(`${testQueue}:processing`, Date.now() - 1000, taskId);
 
 			let seenAttempt: number | undefined;
 			await customProvider.dequeue(testQueue, {
@@ -1706,7 +1698,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should clean up counters for orphaned task ids on claim", async () => {
-			const customProvider = new RedisTaskProvider({ pollInterval: 60000 });
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 60000 });
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1714,7 +1706,7 @@ describe("RedisTaskProvider", () => {
 			// A ready id whose task data was deleted, with leftover counters.
 			await client.set(`${testQueue}:task:orphan-task-id:attempt`, "5");
 			await client.set(`${testQueue}:task:orphan-task-id:fence`, "7");
-			await client.lPush(`${testQueue}:tasks`, "orphan-task-id");
+			await client.lpush(`${testQueue}:tasks`, "orphan-task-id");
 
 			let handlerCalled = false;
 			await customProvider.dequeue(testQueue, {
@@ -1739,7 +1731,7 @@ describe("RedisTaskProvider", () => {
 		});
 
 		test("should remove fence keys on clearQueue", async () => {
-			const customProvider = new RedisTaskProvider();
+			const customProvider = new ValkeyTaskProvider();
 			await customProvider.connect();
 			await customProvider.clearQueue(testQueue);
 
@@ -1751,10 +1743,7 @@ describe("RedisTaskProvider", () => {
 			);
 			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
 			await client.set(`${testQueue}:task:${taskId}:fence`, "1");
-			await client.zAdd(`${testQueue}:processing`, {
-				score: Date.now() + 60000,
-				value: taskId,
-			});
+			await client.zadd(`${testQueue}:processing`, Date.now() + 60000, taskId);
 
 			expect(await client.exists(`${testQueue}:task:${taskId}:fence`)).toBe(1);
 			await customProvider.clearQueue(testQueue);

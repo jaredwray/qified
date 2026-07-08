@@ -15,6 +15,12 @@ services:
     ports:
       - "6379:6379" # Redis port
 
+  valkey:
+    image: valkey/valkey:latest
+    container_name: valkey
+    ports:
+      - "6380:6379" # Valkey port (host 6380; redis already uses 6379)
+
   nats:
     image: nats:latest
     container_name: nats

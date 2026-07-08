@@ -14,6 +14,7 @@ This is a mono repo that contains the following packages:
 
 Additional packages:
 * [@qified/redis](packages/redis/README.md) - Redis Provider (messages and tasks)
+* [@qified/valkey](packages/valkey/README.md) - Valkey Provider (messages and tasks)
 * [@qified/rabbitmq](packages/rabbitmq/README.md) - RabbitMQ Provider (messages and tasks)
 * [@qified/nats](packages/nats/README.md) - NATS Provider (messages and tasks)
 * [@qified/zeromq](packages/zeromq/README.md) - ZeroMQ Provider (messages only)
