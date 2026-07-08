@@ -320,8 +320,13 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			const task = JSON.parse(taskDataStr) as Task;
 			const maxRetries = task.maxRetries ?? this._retries;
 
-			// Remove from processing
-			await client.zRem(this.getProcessingKey(queue), taskId);
+			// Remove from processing. If another instance already claimed this
+			// task, zRem returns 0 and we skip requeueing/dead-lettering it.
+			const removed = await client.zRem(this.getProcessingKey(queue), taskId);
+			/* v8 ignore next 3 -- @preserve */
+			if (removed === 0) {
+				continue;
+			}
 
 			// Remove from local processing set
 			this._processingTasks.get(queue)?.delete(taskId);
@@ -476,12 +481,18 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 					return;
 				}
 				try {
-					// Update deadline in processing set
+					// Update deadline in processing set. "XX" only updates the
+					// score if the task is still tracked, avoiding re-adding a
+					// task that already timed out and left the processing set.
 					const newDeadline = Date.now() + ttl;
-					await client.zAdd(this.getProcessingKey(queue), {
-						score: newDeadline,
-						value: task.id,
-					});
+					await client.zAdd(
+						this.getProcessingKey(queue),
+						{
+							score: newDeadline,
+							value: task.id,
+						},
+						{ XX: true },
+					);
 					// Reset timeout handle
 					/* v8 ignore start -- @preserve */
 					if (timeoutHandle) {

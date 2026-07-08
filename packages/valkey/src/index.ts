@@ -62,10 +62,14 @@ export class ValkeyMessageProvider implements MessageProvider {
 		// The subscriber connection delivers every channel's messages through a
 		// single "message" event, so wire the listener once and route by channel.
 		this.sub.on("message", (channel: string, raw: string) => {
-			const message = JSON.parse(raw) as Message;
-			/* v8 ignore next -- @preserve */
-			const handlers = this.subscriptions.get(channel) ?? [];
-			void Promise.all(handlers.map(async (sub) => sub.handler(message)));
+			try {
+				const message = JSON.parse(raw) as Message;
+				/* v8 ignore next -- @preserve */
+				const handlers = this.subscriptions.get(channel) ?? [];
+				void Promise.all(handlers.map(async (sub) => sub.handler(message)));
+			} catch {
+				// Ignore malformed messages to prevent process crashes.
+			}
 		});
 	}
 

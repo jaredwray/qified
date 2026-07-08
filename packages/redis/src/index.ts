@@ -134,10 +134,14 @@ export class RedisMessageProvider implements MessageProvider {
 			this.subscriptions.set(topic, []);
 			const subClient = await this.getSubClient();
 			await subClient.subscribe(topic, async (raw) => {
-				const message = JSON.parse(raw) as Message;
-				/* v8 ignore next -- @preserve */
-				const handlers = this.subscriptions.get(topic) ?? [];
-				await Promise.all(handlers.map(async (sub) => sub.handler(message)));
+				try {
+					const message = JSON.parse(raw) as Message;
+					/* v8 ignore next -- @preserve */
+					const handlers = this.subscriptions.get(topic) ?? [];
+					await Promise.all(handlers.map(async (sub) => sub.handler(message)));
+				} catch {
+					// Ignore malformed messages to prevent process crashes.
+				}
 			});
 		}
 

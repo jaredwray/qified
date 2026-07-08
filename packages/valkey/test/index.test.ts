@@ -103,6 +103,28 @@ describe("ValkeyMessageProvider", () => {
 		expect(qified.messageProviders[0]).toBeInstanceOf(ValkeyMessageProvider);
 	});
 
+	test("should ignore malformed messages without crashing", async () => {
+		const provider = new ValkeyMessageProvider();
+		let received: Message | undefined;
+		await provider.subscribe("test-topic", {
+			async handler(message) {
+				received = message;
+			},
+		});
+		// Publish a raw, non-JSON payload directly on the channel to exercise the
+		// parse-error path in the subscriber's message listener.
+		const { pub } = provider as unknown as {
+			pub: { publish(channel: string, message: string): Promise<number> };
+		};
+		await pub.publish("test-topic", "not-json{");
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+		expect(received).toBeUndefined();
+
+		await provider.disconnect();
+	});
+
 	test("should get provider id", () => {
 		const provider = new ValkeyMessageProvider();
 		expect(provider.id).toBe(defaultValkeyId);
