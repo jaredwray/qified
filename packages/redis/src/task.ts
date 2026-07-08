@@ -38,10 +38,151 @@ export const defaultRetries = 3;
 export const defaultPollInterval = 1000;
 
 /**
+ * Atomically claims the next ready task. Pops the tail of the ready list and, if
+ * the task data still exists, records it in the processing set with a
+ * server-derived deadline, increments the attempt counter, and bumps the
+ * per-task fence token. Orphaned ids (task data already deleted) have their
+ * counters cleaned up and are skipped.
+ *
+ * KEYS[1] ready list, KEYS[2] processing zset.
+ * ARGV[1] per-task key prefix (`<queue>:task:`), ARGV[2] default timeout (ms).
+ * Returns nil when nothing claimable, else [taskId, taskJson, attempt, fence].
+ *
+ * The per-task keys are built from ARGV[1] because the id is unknown until RPOP;
+ * this is safe on standalone/Sentinel Redis/Valkey but not on Cluster.
+ */
+const CLAIM_SCRIPT = `
+local t = redis.call('TIME')
+local now = t[1] * 1000 + math.floor(t[2] / 1000)
+for _ = 1, 100 do
+	local id = redis.call('RPOP', KEYS[1])
+	if not id then
+		return nil
+	end
+	local data = redis.call('GET', ARGV[1] .. id)
+	if data then
+		local timeout = tonumber(ARGV[2])
+		local ok, task = pcall(cjson.decode, data)
+		if ok and type(task) == 'table' and type(task.timeout) == 'number' then
+			timeout = task.timeout
+		end
+		redis.call('ZADD', KEYS[2], now + timeout, id)
+		local attempt = redis.call('INCR', ARGV[1] .. id .. ':attempt')
+		local fence = redis.call('INCR', ARGV[1] .. id .. ':fence')
+		return { id, data, attempt, tostring(fence) }
+	end
+	redis.call('DEL', ARGV[1] .. id .. ':attempt', ARGV[1] .. id .. ':fence')
+end
+return nil
+`;
+
+/**
+ * Acknowledges (completes) a task, but only if this delivery still owns it.
+ *
+ * KEYS[1] processing zset, KEYS[2] task data, KEYS[3] attempt, KEYS[4] fence.
+ * ARGV[1] fence token, ARGV[2] taskId. Returns 1 if removed, 0 if stale.
+ */
+const ACK_SCRIPT = `
+if redis.call('GET', KEYS[4]) ~= ARGV[1] then
+	return 0
+end
+redis.call('ZREM', KEYS[1], ARGV[2])
+redis.call('DEL', KEYS[2], KEYS[3], KEYS[4])
+return 1
+`;
+
+/**
+ * Rejects a task, requeueing it for retry or moving it to the dead-letter queue,
+ * but only if this delivery still owns it. The fence token is consumed either
+ * way so no other holder of the token can act on the task afterwards.
+ *
+ * KEYS[1] processing, KEYS[2] ready, KEYS[3] dead-letter, KEYS[4] attempt,
+ * KEYS[5] fence. ARGV[1] token, ARGV[2] taskId, ARGV[3] "1"|"0" requeue flag,
+ * ARGV[4] maxRetries. Returns 1 if applied, 0 if stale.
+ */
+const REJECT_SCRIPT = `
+if redis.call('GET', KEYS[5]) ~= ARGV[1] then
+	return 0
+end
+redis.call('ZREM', KEYS[1], ARGV[2])
+local attempt = tonumber(redis.call('GET', KEYS[4]) or '0')
+if ARGV[3] == '1' and attempt < tonumber(ARGV[4]) then
+	redis.call('INCR', KEYS[5])
+	redis.call('LPUSH', KEYS[2], ARGV[2])
+else
+	redis.call('DEL', KEYS[5])
+	redis.call('LPUSH', KEYS[3], ARGV[2])
+end
+return 1
+`;
+
+/**
+ * Extends a task's visibility deadline, but only if this delivery still owns it.
+ * Uses XX (not GT) so extend() may legally shorten the deadline.
+ *
+ * KEYS[1] processing zset, KEYS[2] fence.
+ * ARGV[1] token, ARGV[2] taskId, ARGV[3] ttl (ms). Returns 1 if updated, 0 stale.
+ */
+const EXTEND_SCRIPT = `
+if redis.call('GET', KEYS[2]) ~= ARGV[1] then
+	return 0
+end
+local t = redis.call('TIME')
+local now = t[1] * 1000 + math.floor(t[2] / 1000)
+redis.call('ZADD', KEYS[1], 'XX', now + tonumber(ARGV[3]), ARGV[2])
+return 1
+`;
+
+/**
+ * Recovers a timed-out task: re-checks expiry against the server clock, and if
+ * still expired removes it from processing, invalidates the stale owner's fence
+ * token, and requeues it (retries remaining) or dead-letters it. Mutates nothing
+ * when the task is no longer expired (a fresh delivery re-claimed it) or gone.
+ *
+ * KEYS[1] processing, KEYS[2] ready, KEYS[3] dead-letter, KEYS[4] attempt,
+ * KEYS[5] fence. ARGV[1] taskId, ARGV[2] maxRetries. Returns 1 if recovered.
+ */
+const RECOVER_SCRIPT = `
+local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if not score then
+	return 0
+end
+local t = redis.call('TIME')
+local now = t[1] * 1000 + math.floor(t[2] / 1000)
+if tonumber(score) >= now then
+	return 0
+end
+redis.call('ZREM', KEYS[1], ARGV[1])
+local attempt = tonumber(redis.call('GET', KEYS[4]) or '0')
+if attempt < tonumber(ARGV[2]) then
+	redis.call('INCR', KEYS[5])
+	redis.call('LPUSH', KEYS[2], ARGV[1])
+else
+	redis.call('DEL', KEYS[5])
+	redis.call('LPUSH', KEYS[3], ARGV[1])
+end
+return 1
+`;
+
+/**
  * Redis-based task provider for Qified.
  * Uses Redis lists and sorted sets to enable reliable task queue processing
  * across multiple instances with visibility timeout, retries, and dead-letter queues.
  * Extends Hookified to emit events for errors and other lifecycle events.
+ *
+ * Distributed semantics:
+ * - Delivery is at-least-once: a handler that finishes right at its visibility
+ *   deadline can race recovery and run more than once, so handlers must be
+ *   idempotent.
+ * - Claim, acknowledge, reject, extend, and timeout-recovery run as atomic Lua
+ *   scripts. Each delivery carries a monotonic per-task fence token; an operation
+ *   from a delivery that has lost ownership (its token no longer matches) is a
+ *   no-op, so a stale worker cannot corrupt a newer delivery.
+ * - When several handlers are registered on one queue they share a single
+ *   delivery and token; the first acknowledgement or rejection decides the
+ *   outcome ("first finalizer wins").
+ * - Standalone/Sentinel only: the claim script builds per-task keys from a prefix
+ *   and the key schema is not Redis Cluster compatible.
  */
 export class RedisTaskProvider extends Hookified implements TaskProvider {
 	private _id: string;
@@ -53,7 +194,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	private _active = true;
 	private _pollInterval: number;
 	private _pollTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-	private _processingTasks: Map<string, Set<string>> = new Map();
 
 	/**
 	 * Creates a new Redis task provider instance.
@@ -195,6 +335,22 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
+	 * Gets the Redis key for the task fence token, used to detect stale
+	 * operations from a delivery that has lost ownership of the task.
+	 */
+	private getTaskFenceKey(queue: string, taskId: string): string {
+		return `${queue}:task:${taskId}:fence`;
+	}
+
+	/**
+	 * Gets the shared per-task key prefix (`<queue>:task:`) that the claim script
+	 * uses to build per-task keys from the popped task id.
+	 */
+	private getTaskKeyPrefix(queue: string): string {
+		return `${queue}:task:`;
+	}
+
+	/**
 	 * Enqueues a task to a specific queue.
 	 * @param queue The queue name to enqueue to
 	 * @param taskData The task data to enqueue
@@ -291,7 +447,9 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		const client = await this.getClient();
 		const now = Date.now();
 
-		// Get tasks with deadline < now
+		// Advisory scan for tasks whose deadline has passed. RECOVER re-checks
+		// expiry against the server clock before acting, so a fast/slow local
+		// clock only affects recovery latency, never correctness.
 		const timedOutTasks = await client.zRangeByScore(
 			this.getProcessingKey(queue),
 			0,
@@ -303,41 +461,32 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			if (!this._active) {
 				return;
 			}
-			// Get attempt count
-			const attemptStr = await client.get(
-				this.getTaskAttemptKey(queue, taskId),
-			);
-			const attempt = Number.parseInt(attemptStr ?? "0", 10);
 
-			// Get task data to check maxRetries
+			// Get task data to check maxRetries.
 			const taskDataStr = await client.get(this.getTaskDataKey(queue, taskId));
 			if (!taskDataStr) {
-				// Task data missing, clean up
+				// Task data missing; drop the orphaned processing entry and counters.
 				await client.zRem(this.getProcessingKey(queue), taskId);
+				await client.del(this.getTaskAttemptKey(queue, taskId));
+				await client.del(this.getTaskFenceKey(queue, taskId));
 				continue;
 			}
 
 			const task = JSON.parse(taskDataStr) as Task;
 			const maxRetries = task.maxRetries ?? this._retries;
 
-			// Remove from processing. If another instance already claimed this
-			// task, zRem returns 0 and we skip requeueing/dead-lettering it.
-			const removed = await client.zRem(this.getProcessingKey(queue), taskId);
-			/* v8 ignore next 3 -- @preserve */
-			if (removed === 0) {
-				continue;
-			}
-
-			// Remove from local processing set
-			this._processingTasks.get(queue)?.delete(taskId);
-
-			if (attempt < maxRetries) {
-				// Requeue for retry
-				await client.lPush(this.getQueueKey(queue), taskId);
-			} else {
-				// Move to dead-letter queue
-				await client.lPush(this.getDeadLetterKey(queue), taskId);
-			}
+			// Atomically recover the task: re-verify expiry, invalidate the stale
+			// owner's fence token, and requeue or dead-letter it.
+			await client.eval(RECOVER_SCRIPT, {
+				keys: [
+					this.getProcessingKey(queue),
+					this.getQueueKey(queue),
+					this.getDeadLetterKey(queue),
+					this.getTaskAttemptKey(queue, taskId),
+					this.getTaskFenceKey(queue, taskId),
+				],
+				arguments: [taskId, String(maxRetries)],
+			});
 		}
 	}
 
@@ -362,51 +511,32 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			return;
 		}
 
-		// Initialize processing set for this queue if needed
-		if (!this._processingTasks.has(queue)) {
-			this._processingTasks.set(queue, new Set());
-		}
-
-		/* v8 ignore next -- @preserve */
-		const processingSet = this._processingTasks.get(queue) ?? new Set<string>();
-
-		// Get task from queue
-		let taskId: string | null;
+		// Atomically claim the next task (RPOP ready + ZADD processing + bump
+		// attempt and fence) so a crash can never leave it in neither structure.
+		let reply: [string, string, number, string] | null;
 		try {
-			taskId = await client.rPop(this.getQueueKey(queue));
+			reply = (await client.eval(CLAIM_SCRIPT, {
+				keys: [this.getQueueKey(queue), this.getProcessingKey(queue)],
+				arguments: [this.getTaskKeyPrefix(queue), String(this._timeout)],
+			})) as unknown as [string, string, number, string] | null;
 		} catch (error) {
 			/* v8 ignore start -- @preserve */
 			this.emit("error", error);
 			return;
 			/* v8 ignore stop */
 		}
-		if (!taskId) {
+
+		if (!reply) {
 			return;
 		}
 
-		// Check if already being processed locally
-		/* v8 ignore next 4 -- @preserve */
-		if (processingSet.has(taskId)) {
-			// Put back in queue and return
-			await client.lPush(this.getQueueKey(queue), taskId);
-			return;
-		}
-
-		// Get task data
-		const taskDataStr = await client.get(this.getTaskDataKey(queue, taskId));
-		if (!taskDataStr) {
-			// Task data missing, skip
-			return;
-		}
-
+		const [, taskDataStr, attempt, token] = reply;
 		const task = JSON.parse(taskDataStr) as Task;
 
-		// Mark as processing locally
-		processingSet.add(taskId);
-
-		// Process with each handler
+		// Process with each handler. They share one delivery and fence token;
+		// the first ack/reject wins.
 		for (const handler of handlers) {
-			void this.processTask(queue, task, handler);
+			void this.processTask(queue, task, handler, attempt, token);
 		}
 
 		// Continue processing more tasks
@@ -420,20 +550,12 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		queue: string,
 		task: Task,
 		handler: TaskHandler,
+		attempt: number,
+		token: string,
 	): Promise<void> {
 		const client = await this.getClient();
 		const maxRetries = task.maxRetries ?? this._retries;
 		const timeout = task.timeout ?? this._timeout;
-
-		// Increment attempt count
-		const attempt = await client.incr(this.getTaskAttemptKey(queue, task.id));
-
-		// Add to processing sorted set with deadline
-		const deadline = Date.now() + timeout;
-		await client.zAdd(this.getProcessingKey(queue), {
-			score: deadline,
-			value: task.id,
-		});
 
 		let acknowledged = false;
 		let rejected = false;
@@ -447,7 +569,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				}
 				acknowledged = true;
 				try {
-					await this.removeTask(queue, task.id);
+					await this.removeTask(queue, task.id, token);
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
@@ -460,17 +582,23 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				rejected = true;
 
 				try {
-					// Remove from processing
-					await client.zRem(this.getProcessingKey(queue), task.id);
-					this._processingTasks.get(queue)?.delete(task.id);
-
-					if (requeue && attempt < maxRetries) {
-						// Requeue for retry
-						await client.lPush(this.getQueueKey(queue), task.id);
-					} else {
-						// Move to dead-letter queue
-						await client.lPush(this.getDeadLetterKey(queue), task.id);
-					}
+					// Remove from processing and requeue or dead-letter, but only
+					// if this delivery still owns the task (fence token matches).
+					await client.eval(REJECT_SCRIPT, {
+						keys: [
+							this.getProcessingKey(queue),
+							this.getQueueKey(queue),
+							this.getDeadLetterKey(queue),
+							this.getTaskAttemptKey(queue, task.id),
+							this.getTaskFenceKey(queue, task.id),
+						],
+						arguments: [
+							token,
+							task.id,
+							requeue ? "1" : "0",
+							String(maxRetries),
+						],
+					});
 				} catch (error) {
 					/* v8 ignore next -- @preserve */
 					this.emit("error", error);
@@ -481,18 +609,14 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 					return;
 				}
 				try {
-					// Update deadline in processing set. "XX" only updates the
-					// score if the task is still tracked, avoiding re-adding a
-					// task that already timed out and left the processing set.
-					const newDeadline = Date.now() + ttl;
-					await client.zAdd(
-						this.getProcessingKey(queue),
-						{
-							score: newDeadline,
-							value: task.id,
-						},
-						{ XX: true },
-					);
+					// Extend the deadline only if this delivery still owns the task.
+					await client.eval(EXTEND_SCRIPT, {
+						keys: [
+							this.getProcessingKey(queue),
+							this.getTaskFenceKey(queue, task.id),
+						],
+						arguments: [token, task.id, String(ttl)],
+					});
 					// Reset timeout handle
 					/* v8 ignore start -- @preserve */
 					if (timeoutHandle) {
@@ -556,22 +680,25 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 	}
 
 	/**
-	 * Removes a task completely (on successful ack).
+	 * Removes a task completely (on successful ack), if this delivery still owns
+	 * it. A stale acknowledgement whose fence token no longer matches is a no-op.
 	 */
-	private async removeTask(queue: string, taskId: string): Promise<void> {
+	private async removeTask(
+		queue: string,
+		taskId: string,
+		token: string,
+	): Promise<void> {
 		const client = await this.getClient();
 
-		// Remove from processing set
-		await client.zRem(this.getProcessingKey(queue), taskId);
-
-		// Remove task data
-		await client.del(this.getTaskDataKey(queue, taskId));
-
-		// Remove attempt counter
-		await client.del(this.getTaskAttemptKey(queue, taskId));
-
-		// Remove from local processing set
-		this._processingTasks.get(queue)?.delete(taskId);
+		await client.eval(ACK_SCRIPT, {
+			keys: [
+				this.getProcessingKey(queue),
+				this.getTaskDataKey(queue, taskId),
+				this.getTaskAttemptKey(queue, taskId),
+				this.getTaskFenceKey(queue, taskId),
+			],
+			arguments: [token, taskId],
+		});
 	}
 
 	/**
@@ -620,7 +747,6 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 
 		// Clear handlers
 		this._taskHandlers.clear();
-		this._processingTasks.clear();
 
 		// Disconnect from Redis
 		if (this._connectionPromise) {
@@ -702,10 +828,11 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 
 		const allTaskIds = [...queueTasks, ...processingTasks, ...deadLetterTasks];
 
-		// Delete all task data and attempt counters
+		// Delete all task data, attempt, and fence keys
 		for (const taskId of allTaskIds) {
 			await client.del(this.getTaskDataKey(queue, taskId));
 			await client.del(this.getTaskAttemptKey(queue, taskId));
+			await client.del(this.getTaskFenceKey(queue, taskId));
 		}
 
 		// Clear all queue structures

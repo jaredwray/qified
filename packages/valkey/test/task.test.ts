@@ -1506,4 +1506,250 @@ describe("ValkeyTaskProvider", () => {
 			await customProvider.disconnect();
 		});
 	});
+
+	describe("fencing and distributed safety", () => {
+		test("should ignore a stale ack after the fence token changes", async () => {
+			const customProvider = new ValkeyTaskProvider({
+				timeout: 60000,
+				pollInterval: 60000,
+			});
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (task: Task, ctx: TaskContext) => {
+					// Simulate another worker re-claiming the task by bumping the
+					// fence, making this delivery's token stale, then ack.
+					await client.incr(`${testQueue}:task:${task.id}:fence`);
+					await ctx.ack();
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+			const taskId = await customProvider.enqueue(testQueue, {
+				data: { message: "test" },
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			// The stale ack must not delete the task or drop the processing entry.
+			expect(await client.get(`${testQueue}:task:${taskId}`)).not.toBeNull();
+			const stats = await customProvider.getQueueStats(testQueue);
+			expect(stats.processing).toBe(1);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should ignore a stale reject after the fence token changes", async () => {
+			const customProvider = new ValkeyTaskProvider({
+				timeout: 60000,
+				pollInterval: 60000,
+			});
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (task: Task, ctx: TaskContext) => {
+					await client.incr(`${testQueue}:task:${task.id}:fence`);
+					await ctx.reject(false);
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+			const taskId = await customProvider.enqueue(testQueue, {
+				data: { message: "test" },
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			// The stale reject must not move the task to the dead-letter queue.
+			const dlq = await customProvider.getDeadLetterTasks(testQueue);
+			expect(dlq.length).toBe(0);
+			const stats = await customProvider.getQueueStats(testQueue);
+			expect(stats.processing).toBe(1);
+			expect(await client.get(`${testQueue}:task:${taskId}`)).not.toBeNull();
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should ignore a stale extend after the fence token changes", async () => {
+			const customProvider = new ValkeyTaskProvider({
+				timeout: 60000,
+				pollInterval: 60000,
+			});
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			let completed = false;
+			const handler: TaskHandler = {
+				id: "test-handler",
+				handler: async (task: Task, ctx: TaskContext) => {
+					const before = await client.zscore(
+						`${testQueue}:processing`,
+						task.id,
+					);
+					await client.incr(`${testQueue}:task:${task.id}:fence`);
+					await ctx.extend(120000);
+					const after = await client.zscore(`${testQueue}:processing`, task.id);
+					// A stale extend must not move the deadline.
+					expect(after).toBe(before);
+					completed = true;
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handler);
+			await customProvider.enqueue(testQueue, { data: { message: "test" } });
+
+			await new Promise((resolve) => setTimeout(resolve, 150));
+			expect(completed).toBe(true);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should let the first finalizer win across multiple handlers", async () => {
+			const customProvider = new ValkeyTaskProvider({
+				timeout: 60000,
+				pollInterval: 60000,
+			});
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			const handlerA: TaskHandler = {
+				id: "handler-a",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					await ctx.ack();
+				},
+			};
+			const handlerB: TaskHandler = {
+				id: "handler-b",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					// Finish after A has already finalized; this reject is fenced out.
+					await new Promise((resolve) => setTimeout(resolve, 80));
+					await ctx.reject(false);
+				},
+			};
+
+			await customProvider.dequeue(testQueue, handlerA);
+			await customProvider.dequeue(testQueue, handlerB);
+			const taskId = await customProvider.enqueue(testQueue, {
+				data: { message: "test" },
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 250));
+
+			const dlq = await customProvider.getDeadLetterTasks(testQueue);
+			expect(dlq.length).toBe(0);
+			const stats = await customProvider.getQueueStats(testQueue);
+			expect(stats).toEqual({ waiting: 0, processing: 0, deadLetter: 0 });
+			expect(await client.exists(`${testQueue}:task:${taskId}`)).toBe(0);
+			expect(await client.exists(`${testQueue}:task:${taskId}:fence`)).toBe(0);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should recover a timed-out task and invalidate the stale owner", async () => {
+			const customProvider = new ValkeyTaskProvider({
+				pollInterval: 25,
+				retries: 3,
+			});
+			customProvider.throwOnEmptyListeners = false;
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			const taskId = "recover-task";
+			await client.set(
+				`${testQueue}:task:${taskId}`,
+				JSON.stringify({ id: taskId, data: { message: "test" } }),
+			);
+			await client.set(`${testQueue}:task:${taskId}:attempt`, "0");
+			await client.set(`${testQueue}:task:${taskId}:fence`, "1");
+			// Already-expired processing entry owned by a now-dead worker.
+			await client.zadd(`${testQueue}:processing`, Date.now() - 1000, taskId);
+
+			let seenAttempt: number | undefined;
+			await customProvider.dequeue(testQueue, {
+				id: "test-handler",
+				handler: async (_task: Task, ctx: TaskContext) => {
+					seenAttempt = ctx.metadata.attempt;
+					await ctx.ack();
+				},
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 200));
+
+			// RECOVER requeued it (attempt 0 < 3); CLAIM re-delivered as attempt 1.
+			expect(seenAttempt).toBe(1);
+			const stats = await customProvider.getQueueStats(testQueue);
+			expect(stats).toEqual({ waiting: 0, processing: 0, deadLetter: 0 });
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should clean up counters for orphaned task ids on claim", async () => {
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 60000 });
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			// A ready id whose task data was deleted, with leftover counters.
+			await client.set(`${testQueue}:task:orphan-task-id:attempt`, "5");
+			await client.set(`${testQueue}:task:orphan-task-id:fence`, "7");
+			await client.lpush(`${testQueue}:tasks`, "orphan-task-id");
+
+			let handlerCalled = false;
+			await customProvider.dequeue(testQueue, {
+				id: "test-handler",
+				handler: async () => {
+					handlerCalled = true;
+				},
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 150));
+
+			expect(handlerCalled).toBe(false);
+			expect(
+				await client.exists(`${testQueue}:task:orphan-task-id:attempt`),
+			).toBe(0);
+			expect(
+				await client.exists(`${testQueue}:task:orphan-task-id:fence`),
+			).toBe(0);
+
+			await customProvider.clearQueue(testQueue);
+			await customProvider.disconnect();
+		});
+
+		test("should remove fence keys on clearQueue", async () => {
+			const customProvider = new ValkeyTaskProvider();
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+
+			const client = (customProvider as any)._client;
+			const taskId = "fence-task";
+			await client.set(
+				`${testQueue}:task:${taskId}`,
+				JSON.stringify({ id: taskId, data: {} }),
+			);
+			await client.set(`${testQueue}:task:${taskId}:attempt`, "1");
+			await client.set(`${testQueue}:task:${taskId}:fence`, "1");
+			await client.zadd(`${testQueue}:processing`, Date.now() + 60000, taskId);
+
+			expect(await client.exists(`${testQueue}:task:${taskId}:fence`)).toBe(1);
+			await customProvider.clearQueue(testQueue);
+			expect(await client.exists(`${testQueue}:task:${taskId}:fence`)).toBe(0);
+
+			await customProvider.disconnect();
+		});
+	});
 });
