@@ -508,6 +508,7 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 							}
 						}
 					}, ttl);
+					timeoutHandle.unref();
 				} catch (error) {
 					this.emit("error", error);
 				}
@@ -530,6 +531,8 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				}
 			}
 		}, timeout);
+		// Do not let a pending task timeout keep the process alive on its own.
+		timeoutHandle.unref();
 
 		try {
 			await handler.handler(task, context);

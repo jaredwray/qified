@@ -132,17 +132,26 @@ export class RedisMessageProvider implements MessageProvider {
 	async subscribe(topic: string, handler: TopicHandler): Promise<void> {
 		if (!this.subscriptions.has(topic)) {
 			this.subscriptions.set(topic, []);
-			const subClient = await this.getSubClient();
-			await subClient.subscribe(topic, async (raw) => {
-				try {
-					const message = JSON.parse(raw) as Message;
-					/* v8 ignore next -- @preserve */
-					const handlers = this.subscriptions.get(topic) ?? [];
-					await Promise.all(handlers.map(async (sub) => sub.handler(message)));
-				} catch {
-					// Ignore malformed messages to prevent process crashes.
-				}
-			});
+			try {
+				const subClient = await this.getSubClient();
+				await subClient.subscribe(topic, async (raw) => {
+					try {
+						const message = JSON.parse(raw) as Message;
+						/* v8 ignore next -- @preserve */
+						const handlers = this.subscriptions.get(topic) ?? [];
+						await Promise.all(
+							handlers.map(async (sub) => sub.handler(message)),
+						);
+					} catch {
+						// Ignore malformed messages to prevent process crashes.
+					}
+				});
+			} catch (error) {
+				// Roll back the topic entry so a later retry re-subscribes
+				// instead of only appending a handler locally.
+				this.subscriptions.delete(topic);
+				throw error;
+			}
 		}
 
 		this.subscriptions.get(topic)?.push(handler);

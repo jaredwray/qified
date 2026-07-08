@@ -125,6 +125,33 @@ describe("RedisMessageProvider", () => {
 		await provider.disconnect();
 	});
 
+	test("should roll back topic state when subscribe fails", async () => {
+		const provider = new RedisMessageProvider({
+			uri: "redis://localhost:9999",
+		});
+		await expect(
+			provider.subscribe("test-topic", { async handler() {} }),
+		).rejects.toThrow();
+		// The topic entry must not linger, or a later retry would skip the real
+		// subscribe and never receive messages.
+		expect(provider.subscriptions.has("test-topic")).toBe(false);
+	});
+
+	test("should not crash when a handler rejects", async () => {
+		const provider = new RedisMessageProvider();
+		await provider.subscribe("test-topic", {
+			async handler() {
+				throw new Error("handler failure");
+			},
+		});
+		await provider.publish("test-topic", { id: "1", data: "test" });
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+		await provider.disconnect();
+		expect(provider.subscriptions.size).toBe(0);
+	});
+
 	test("should get provider id", () => {
 		const provider = new RedisMessageProvider();
 		expect(provider.id).toBe(defaultRedisId);
