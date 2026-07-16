@@ -48,8 +48,8 @@ importers:
         specifier: ^3.4.0
         version: 3.4.0
       hookified:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       qified:
         specifier: workspace:^
         version: link:../qified
@@ -57,8 +57,8 @@ importers:
   packages/qified:
     dependencies:
       hookified:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
 
   packages/rabbitmq:
     dependencies:
@@ -66,8 +66,8 @@ importers:
         specifier: ^2.0.1
         version: 2.0.1
       hookified:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       qified:
         specifier: workspace:^
         version: link:../qified
@@ -75,8 +75,8 @@ importers:
   packages/redis:
     dependencies:
       hookified:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       qified:
         specifier: workspace:^
         version: link:../qified
@@ -87,8 +87,8 @@ importers:
   packages/valkey:
     dependencies:
       hookified:
-        specifier: ^3.0.0
-        version: 3.0.0
+        specifier: ^3.0.1
+        version: 3.0.1
       iovalkey:
         specifier: ^0.3.3
         version: 0.3.3
@@ -1465,6 +1465,10 @@ packages:
 
   hookified@3.0.0:
     resolution: {integrity: sha512-x+jzDjd9CWxdgl6u/K4pjnvw7PZx6ZSpiPGAV43uXlJiJy7r2jIEUxxU1Cv7+rwy1GK5Qt5S+Jp7n81DpcUvTA==}
+    engines: {node: '>=22.18.0'}
+
+  hookified@3.0.1:
+    resolution: {integrity: sha512-mtpUIV7U9reosQ16+OHWBd0Ca07fs1ryChQjBPuUMZnrRdLTCW+kEfkTcFudkaevp3gVe5H9FxDCBxYIdO+QQA==}
     engines: {node: '>=22.18.0'}
 
   html-dom-parser@8.0.0:
@@ -3761,6 +3765,8 @@ snapshots:
   hookified@2.2.0: {}
 
   hookified@3.0.0: {}
+
+  hookified@3.0.1: {}
 
   html-dom-parser@8.0.0:
     dependencies:
