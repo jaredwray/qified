@@ -118,6 +118,37 @@ describe("ZmqMessageProvider", () => {
 		await qified.disconnect();
 	});
 
+	test("should remove the topic once the last subscriber is gone", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5556" });
+		const message: Omit<Message, "providerId"> = { id: "1", data: "test" };
+		const topic = "test-topic";
+		const id = "test-handler";
+		await provider.subscribe(topic, {
+			id,
+			async handler(message) {
+				void message;
+			},
+		});
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		await provider.publish(topic, message);
+
+		// Let the event loop iterate so message queue is read/written at next tick
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		await provider.unsubscribe(topic, id);
+
+		expect(provider.subscriptions.get(topic)).toBeUndefined();
+
+		await provider.disconnect();
+	});
+
 	test("should create Qified instance with ZeroMQ provider", () => {
 		const qified = createQified();
 		expect(qified).toBeInstanceOf(Qified);
