@@ -173,7 +173,6 @@ export class ZmqMessageProvider implements MessageProvider {
 
 		this.subscriptions.clear();
 
-		// Close sockets and wait for them to fully close to free the port
 		this._subscriber?.close();
 		this._publisher?.close();
 
