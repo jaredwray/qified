@@ -158,6 +158,7 @@ export class ZmqMessageProvider implements MessageProvider {
 			}
 		} else {
 			this.subscriptions.delete(topic);
+			this._subscriber?.unsubscribe(topic);
 		}
 	}
 
