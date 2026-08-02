@@ -155,9 +155,16 @@ export class ZmqMessageProvider implements MessageProvider {
 					topic,
 					current.filter((sub) => sub.id !== id),
 				);
+
+				if (this.subscriptions.get(topic)?.length === 0) {
+					this.subscriptions.delete(topic);
+				}
 			}
 		} else {
 			this.subscriptions.delete(topic);
+		}
+
+		if (!this.subscriptions.has(topic)) {
 			this._subscriber?.unsubscribe(topic);
 		}
 	}
