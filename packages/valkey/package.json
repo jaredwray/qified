@@ -39,7 +39,7 @@
   "license": "MIT",
   "dependencies": {
     "hookified": "^3.0.1",
-    "iovalkey": "^0.3.3"
+    "iovalkey": "^0.4.0"
   },
   "peerDependencies": {
     "qified": "workspace:^"
