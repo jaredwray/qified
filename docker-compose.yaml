@@ -1,6 +1,6 @@
 services:
   rabbitmq:
-    image: rabbitmq:management
+    image: rabbitmq:4.3.4-management
     container_name: rabbitmq
     ports:
       - "5672:5672" # RabbitMQ port
