@@ -10,7 +10,7 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
 
   redis:
-    image: redis:latest
+    image: redis:8.10.0
     container_name: redis
     ports:
       - "6379:6379" # Redis port
