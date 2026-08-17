@@ -32,7 +32,9 @@ To contribute follow the [Contributing Guidelines](CONTRIBUTING.md) and [Code of
 
 # Publishing
 
-This is a mono repo and uses [pnpm](https://pnpm.io/) for package management. In addition all packages are versioned using [semantic versioning](https://semver.org/) and are published using github actions. To do a version bump and publish, follow these steps:
+This is a mono repo and uses [pnpm](https://pnpm.io/) for package management. All packages share a [semantic version](https://semver.org/). Releases are staged from GitHub Actions, reviewed in [Drydock](https://drydock.org/), then promoted with 2FA. Publish and stage commands live only in [`.github/workflows/release.yaml`](.github/workflows/release.yaml) — not in published `package.json` scripts, which ship in the tarball and would look like a tampered release pipeline to artifact scanners.
+
+To do a version bump and publish:
 
 1. Make sure you have the latest changes from the main branch.
 2. Update the `package.json` in the root directory with the new version number.
@@ -41,7 +43,11 @@ This is a mono repo and uses [pnpm](https://pnpm.io/) for package management. In
    - If you are making a bug fix, use the `patch` version bump. `0.0.X`
 3. Sync the version changes to all packages by running `pnpm version:sync`.
 4. Check the changes and commit them to the main branch.
-5. Do a release on GitHub. CI stages the packages with `npm stage publish` (they do not go live). A maintainer then reviews (Drydock) and promotes the staged versions with 2FA.
+5. Do a release on GitHub. CI then:
+   1. Builds and tests
+   2. Packs each package (`pnpm pack:packages`) so `workspace:` ranges become real semver
+   3. Stages the tarballs with `pnpm stage publish --access public --provenance` (OIDC; they do not go live)
+6. Review the staged artifacts in Drydock, then promote with 2FA.
 
 # License
 [MIT & © Jared Wray](LICENSE)
