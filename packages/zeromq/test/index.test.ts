@@ -198,9 +198,38 @@ describe("ZmqMessageProvider", () => {
 
 	test("should allow unsubscribe before any subscription", async () => {
 		const provider = new ZmqMessageProvider();
-		await provider.unsubscribe("test-topic", "missing");
-		expect(provider.subscriptions.size).toBe(0);
-		await provider.disconnect();
+		const unsubscribeSpy = vi.spyOn(Subscriber.prototype, "unsubscribe");
+
+		try {
+			await provider.unsubscribe("test-topic", "missing");
+			expect(provider.subscriptions.size).toBe(0);
+			expect(unsubscribeSpy).not.toHaveBeenCalled();
+		} finally {
+			unsubscribeSpy.mockRestore();
+			await provider.disconnect();
+		}
+	});
+
+	test("should not unsubscribe the socket for an unknown topic", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5561" });
+		const unsubscribeSpy = vi.spyOn(Subscriber.prototype, "unsubscribe");
+
+		try {
+			await provider.subscribe("test-topic", {
+				id: "handler",
+				async handler() {},
+			});
+			unsubscribeSpy.mockClear();
+
+			await provider.unsubscribe("unknown-topic", "handler");
+			await provider.unsubscribe("another-unknown");
+
+			expect(unsubscribeSpy).not.toHaveBeenCalled();
+			expect(provider.subscriptions.has("test-topic")).toBe(true);
+		} finally {
+			unsubscribeSpy.mockRestore();
+			await provider.disconnect();
+		}
 	});
 
 	test("should unsubscribe remaining topics on disconnect", async () => {

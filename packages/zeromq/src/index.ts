@@ -148,6 +148,8 @@ export class ZmqMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the unsubscription is complete.
 	 */
 	public async unsubscribe(topic: string, id?: string): Promise<void> {
+		const hadTopic = this.subscriptions.has(topic);
+
 		if (id) {
 			const current = this.subscriptions.get(topic);
 			if (current) {
@@ -164,7 +166,7 @@ export class ZmqMessageProvider implements MessageProvider {
 			this.subscriptions.delete(topic);
 		}
 
-		if (!this.subscriptions.has(topic)) {
+		if (hadTopic && !this.subscriptions.has(topic)) {
 			this._subscriber?.unsubscribe(topic);
 		}
 	}
