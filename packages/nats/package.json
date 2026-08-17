@@ -21,7 +21,7 @@
     "test:ci": "biome check --error-on-warnings && vitest run --coverage",
     "clean": "rimraf ./dist ./coverage",
     "build": "tsdown src/index.ts --format esm --format cjs --dts",
-    "build:publish": "pnpm build && pnpm pack --out packed.tgz && npm stage publish --access public --provenance packed.tgz",
+    "build:publish": "pnpm build && pnpm pack --out packed.tgz && npm stage publish --access public --provenance ./packed.tgz",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
