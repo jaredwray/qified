@@ -81,10 +81,12 @@ jobs:
     - name: Testing
       run: pnpm test
 
+    # Pack and stage stay in CI, not in published package.json scripts.
+    # Those scripts ship in the tarball; Drydock (correctly) treats a changed
+    # `npm stage publish` / `npm publish` line as a high-risk pipeline delta.
     - name: Pack
       run: |
-        mkdir -p packed
-        pnpm --filter "./packages/**" -r pack --pack-destination "${PWD}/packed"
+        pnpm pack:packages
         ls -la packed
 
     - name: Install npm for staged publishing
@@ -96,6 +98,7 @@ jobs:
       # packed/*.tgz path is parsed as GitHub owner/repo shorthand (npm npa),
       # which then fails with git ls-remote Permission denied (publickey).
       # npm stage publish accepts one package-spec, so stage each tarball.
+      # Keep this command here (OIDC + provenance), never in package.json.
       run: |
         shopt -s nullglob
         tarballs=(./packed/*.tgz)

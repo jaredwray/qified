@@ -16,8 +16,7 @@
     "website:build": "docula build",
     "website:dev": "docula dev",
     "version:sync": "tsx scripts/version-sync.ts",
-    "publish:qified": "pnpm recursive --filter 'qified' run build:publish",
-    "publish:packages": "pnpm publish:qified && pnpm recursive --filter '!qified' run build:publish",
+    "pack:packages": "mkdir -p packed && pnpm --filter \"./packages/**\" -r pack --pack-destination \"$PWD/packed\"",
     "build": "pnpm --filter qified build && pnpm --filter '!qified' -r build",
     "clean": "pnpm -r clean"
   },
