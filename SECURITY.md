@@ -20,9 +20,10 @@ We will acknowledge receipt, work with you on a coordinated disclosure timeline,
 
 ## How this repository is secured
 
-This repository follows the [defense-in-depth](https://github.com/jaredwray/agentic/blob/main/skills/security/defense-in-depth-nodejs/SKILL.md) hardening checklist; progress is tracked in [DEFENSE_IN_DEPTH.md](./DEFENSE_IN_DEPTH.md). Measures currently in place:
+This repository follows the [defense-in-depth](https://github.com/jaredwray/agentic/blob/main/skills/security/defense-in-depth-nodejs/SKILL.md)
+hardening checklist; progress is tracked in [DEFENSE_IN_DEPTH.md](./DEFENSE_IN_DEPTH.md). Measures currently in place:
 
-- Every GitHub Action is pinned to a full commit SHA.
-- Dependencies install through pnpm 11 with a 7-day cooldown on new versions, and lifecycle scripts are blocked by default (reviewed `allowBuilds` exceptions only). CI installs with a frozen lockfile.
-- Socket reviews every pull request that changes dependencies.
+- CI runs with least-privilege permissions; every action is pinned to a full commit SHA; Socket Firewall (`sfw`) wraps `pnpm install`; workflows are security-linted with zizmor on every PR.
+- Codespaces and Cursor Cloud Agents install through Aikido Safe Chain; package-manager shims must not be bypassed.
+- Dependencies install through pnpm with a 7-day cooldown on new versions, and lifecycle scripts are blocked by default. Socket reviews every dependency change; Aikido scans every build.
 - npm releases authenticate with OIDC trusted publishing and provenance. There are no npm tokens in Actions.
