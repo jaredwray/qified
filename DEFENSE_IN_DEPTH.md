@@ -41,7 +41,7 @@ Profile: npm library · public
 
 - [ ] `permissions: contents: read` (or `{}` + per-job grants) on every workflow (PR #227 pending)
 - [x] Every action pinned to a full commit SHA (`npx actions-up`) — verified on main
-- [ ] Every job installs Socket Firewall (`SocketDev/action` SHA-pinned, `firewall-version` pinned); `pnpm install` / `npm install` run as `sfw pnpm install` / `sfw npm install`
+- [ ] Every job installs Socket Firewall (`SocketDev/action` SHA-pinned, `firewall-version` pinned); `pnpm install` / `npm install` run as `sfw pnpm install` / `sfw npm install` (PR #227 pending)
 - [ ] `.github/workflows/check-workflows.yaml` lints workflows with zizmor on every PR
 - [ ] `persist-credentials: false` on checkouts that don't push (PR #227 pending)
 - [x] No `pull_request_target` on workflows that run untrusted PR code — verified on main
