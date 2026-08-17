@@ -7,7 +7,7 @@ on:
 
 # OIDC trusted publishing to npm requires id-token: write so the job can mint
 # the OIDC token that npm exchanges for a short-lived credential. CI only
-# stages (`npm stage publish`); a maintainer promotes with 2FA. No long-lived
+# stages (`pnpm stage publish`); a maintainer promotes with 2FA. No long-lived
 # NPM_TOKEN is needed and provenance attestations are generated.
 permissions:
   contents: read
@@ -83,22 +83,17 @@ jobs:
 
     # Pack and stage stay in CI, not in published package.json scripts.
     # Those scripts ship in the tarball; Drydock (correctly) treats a changed
-    # `npm stage publish` / `npm publish` line as a high-risk pipeline delta.
+    # `pnpm stage publish` / `npm publish` line as a high-risk pipeline delta.
     - name: Pack
       run: |
         pnpm pack:packages
         ls -la packed
 
-    - name: Install npm for staged publishing
-      # zizmor: ignore[adhoc-packages] pin npm 11.19.0 so `npm stage publish` is available
-      run: sfw npm install --global npm@11.19.0
-
     - name: Stage publish
-      # Prefix with ./ so npm treats the tarball as a local file. A bare
-      # packed/*.tgz path is parsed as GitHub owner/repo shorthand (npm npa),
-      # which then fails with git ls-remote Permission denied (publickey).
-      # npm stage publish accepts one package-spec, so stage each tarball.
-      # Keep this command here (OIDC + provenance), never in package.json.
+      # Pack with pnpm first so workspace: ranges become real semver, then
+      # stage the exact tarballs. Prefix with ./ so a bare packed/*.tgz path
+      # is not parsed as GitHub owner/repo shorthand. Keep this command here
+      # (OIDC + provenance), never in package.json.
       run: |
         shopt -s nullglob
         tarballs=(./packed/*.tgz)
@@ -107,5 +102,5 @@ jobs:
           exit 1
         fi
         for tgz in "${tarballs[@]}"; do
-          npm stage publish "$tgz" --access public --provenance
+          pnpm stage publish "$tgz" --access public --provenance --no-git-checks
         done

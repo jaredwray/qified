@@ -46,7 +46,7 @@ To do a version bump and publish:
 5. Do a release on GitHub. CI then:
    1. Builds and tests
    2. Packs each package (`pnpm pack:packages`) so `workspace:` ranges become real semver
-   3. Stages the tarballs with `npm stage publish --access public --provenance` (OIDC; they do not go live)
+   3. Stages the tarballs with `pnpm stage publish --access public --provenance` (OIDC; they do not go live)
 6. Review the staged artifacts in Drydock, then promote with 2FA.
 
 # License
