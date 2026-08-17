@@ -22,9 +22,9 @@ Profile: npm library · public
 - [x] Secret scanning + push protection enabled *(plan-gated on private repos)* — applied by maintainer 2026-08-17
 - [x] Private vulnerability reporting enabled *(public repos only)* — applied by maintainer 2026-08-17
 - [x] Dependabot alerts enabled — applied by maintainer 2026-08-17
-- [ ] Dependabot rule: auto-dismiss low + medium (manual)
-- [ ] Phishing-resistant 2FA (passkeys / hardware keys) on the GitHub and npm accounts (manual)
-- [ ] Recovery codes stored offline in a password manager (manual)
+- [x] Dependabot rule: auto-dismiss low + medium (manual) — completed by maintainer 2026-08-17
+- [x] Phishing-resistant 2FA (passkeys / hardware keys) on the GitHub and npm accounts (manual) — completed by maintainer 2026-08-17
+- [x] Recovery codes stored offline in a password manager (manual) — completed by maintainer 2026-08-17
 - [x] Codespaces and Cursor Cloud Agents bootstrap Aikido Safe Chain via scripts/setup-cloud-environment.sh (--ci shims, frozen lockfile) — PR #227
 
 ## 3. Dependencies (pnpm)
@@ -50,14 +50,14 @@ Profile: npm library · public
 
 ## 5. npm publishing — npm libraries only
 
-- [ ] OIDC trusted publishing configured **stage-only** on npmjs.com for the publish workflow — it can stage, never publish live (manual)
+- [x] OIDC trusted publishing configured **stage-only** on npmjs.com for the publish workflow — it can stage, never publish live (manual) — completed by maintainer 2026-08-17
 - [x] Staged publishing: CI runs `npm stage publish`; a maintainer promotes with 2FA (manual) — PR #230
-- [ ] Drydock connected — staged releases reviewed before promotion (manual)
-- [ ] No direct publish rights: package requires 2FA and disallows tokens (manual)
+- [x] Drydock connected — staged releases reviewed before promotion (manual) — completed by maintainer 2026-08-17
+- [x] No direct publish rights: package requires 2FA and disallows tokens (manual) — completed by maintainer 2026-08-17
 - [x] `package.json` `repository.url` accurate so provenance maps to this repo — verified on main
 
 ## 6. Security tooling
 
 - [x] Aikido runs on every build — verified on main (Aikido Security GitHub app)
-- [x] Aikido release gate: the release workflow's stage-publish job `needs:` a passing `scan-release` — PR #227
+- [x] Aikido release gate: the release workflow's stage-publish job `needs:` a passing `scan-release` — PR #227; `AIKIDO_CLIENT_API_KEY` added by maintainer 2026-08-17
 - [x] Socket reviews every PR that changes dependencies — verified on main
