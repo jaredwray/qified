@@ -45,7 +45,7 @@ Profile: npm library · public
 - [ ] `.github/workflows/check-workflows.yaml` lints workflows with zizmor on every PR (PR #227 pending)
 - [ ] `persist-credentials: false` on checkouts that don't push (PR #227 pending)
 - [x] No `pull_request_target` on workflows that run untrusted PR code — verified on main
-- [ ] Artifact-publishing workflows disable `actions/setup-node` default caching (`package-manager-cache: false`) to prevent cache poisoning
+- [ ] Artifact-publishing workflows disable `actions/setup-node` default caching (`package-manager-cache: false`) to prevent cache poisoning (PR #227 pending)
 - [x] No npm tokens (or other registry credentials) in Actions secrets — verified on main
 
 ## 5. npm publishing — npm libraries only
