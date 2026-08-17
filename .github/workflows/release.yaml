@@ -6,8 +6,9 @@ on:
     types: [released]
 
 # OIDC trusted publishing to npm requires id-token: write so the job can mint
-# the OIDC token that npm exchanges for a short-lived publish credential. No
-# long-lived NPM_TOKEN is needed and provenance attestations are generated.
+# the OIDC token that npm exchanges for a short-lived credential. CI only
+# stages (`npm stage publish`); a maintainer promotes with 2FA. No long-lived
+# NPM_TOKEN is needed and provenance attestations are generated.
 permissions:
   contents: read
 
@@ -63,7 +64,10 @@ jobs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: 24
+        registry-url: https://registry.npmjs.org
         package-manager-cache: false
+    - name: Install npm for staged publishing
+      run: sfw npm install --global npm@11.19.0
 
     - name: Install Dependencies
       run: sfw pnpm install --frozen-lockfile
@@ -80,5 +84,5 @@ jobs:
     - name: Testing
       run: pnpm test
 
-    - name: Publish
+    - name: Stage publish
       run: pnpm publish:packages
