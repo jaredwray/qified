@@ -23,8 +23,8 @@ Profile: npm library · public
 - [x] Private vulnerability reporting enabled *(public repos only)* — applied by maintainer 2026-08-17
 - [x] Dependabot alerts enabled — applied by maintainer 2026-08-17
 - [ ] Dependabot rule: auto-dismiss low + medium (manual)
-- [ ] Phishing-resistant 2FA (passkeys / hardware keys) on the GitHub and npm accounts (manual)
-- [ ] Recovery codes stored offline in a password manager (manual)
+- [x] Phishing-resistant 2FA (passkeys / hardware keys) on the GitHub and npm accounts (manual) — completed by maintainer 2026-08-17
+- [x] Recovery codes stored offline in a password manager (manual) — completed by maintainer 2026-08-17
 - [x] Codespaces and Cursor Cloud Agents bootstrap Aikido Safe Chain via scripts/setup-cloud-environment.sh (--ci shims, frozen lockfile) — PR #227
 
 ## 3. Dependencies (pnpm)
