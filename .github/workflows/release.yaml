@@ -95,4 +95,14 @@ jobs:
       # Prefix with ./ so npm treats the tarball as a local file. A bare
       # packed/*.tgz path is parsed as GitHub owner/repo shorthand (npm npa),
       # which then fails with git ls-remote Permission denied (publickey).
-      run: npm stage publish ./packed/*.tgz --access public --provenance
+      # npm stage publish accepts one package-spec, so stage each tarball.
+      run: |
+        shopt -s nullglob
+        tarballs=(./packed/*.tgz)
+        if [ ${#tarballs[@]} -eq 0 ]; then
+          echo "No tarballs in packed/" >&2
+          exit 1
+        fi
+        for tgz in "${tarballs[@]}"; do
+          npm stage publish "$tgz" --access public --provenance
+        done
