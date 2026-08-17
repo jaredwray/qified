@@ -203,6 +203,20 @@ describe("ZmqMessageProvider", () => {
 		await provider.disconnect();
 	});
 
+	test("should unsubscribe remaining topics on disconnect", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5560" });
+		await provider.subscribe("test-topic", {
+			id: "handler",
+			async handler() {},
+		});
+
+		expect(provider.subscriptions.has("test-topic")).toBe(true);
+
+		await provider.disconnect();
+
+		expect(provider.subscriptions.size).toBe(0);
+	});
+
 	test("should create Qified instance with ZeroMQ provider", () => {
 		const qified = createQified();
 		expect(qified).toBeInstanceOf(Qified);
