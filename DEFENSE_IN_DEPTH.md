@@ -11,6 +11,16 @@ Profile: npm library · public
 
 ## 2. Repository lockdown
 
+GitHub settings below are applied last by a repo admin (not this agent):
+
+```bash
+./scripts/lockdown-repo.sh jaredwray/qified \
+  --required-checks "build (22),build (24),build (26),zizmor" \
+  --allowed-actions "codecov/*,cloudflare/*"
+```
+
+Audit with `./scripts/lockdown-repo.sh jaredwray/qified --check --required-checks "build (22),build (24),build (26),zizmor" --allowed-actions "codecov/*,cloudflare/*"`.
+
 - [x] `.github/CODEOWNERS` covers `/.github/`, `/.cursor/`, `/.devcontainer/`, `/scripts/` with owners the maintainer names — PR #227
 - [ ] Lockdown script run; `lockdown-repo.sh --check` passes clean
 - [ ] Pull requests required on the default branch (0 required approving reviews, last-push approval off, code-owner review of owned paths, Restrict updates off; the owner may merge without a review); force pushes and deletion blocked
