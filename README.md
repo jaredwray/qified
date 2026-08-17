@@ -41,7 +41,7 @@ This is a mono repo and uses [pnpm](https://pnpm.io/) for package management. In
    - If you are making a bug fix, use the `patch` version bump. `0.0.X`
 3. Sync the version changes to all packages by running `pnpm version:sync`.
 4. Check the changes and commit them to the main branch.
-5. Do a release on GitHub. This will trigger the GitHub Actions workflow to publish the packages.
+5. Do a release on GitHub. CI stages the packages with `npm stage publish` (they do not go live). A maintainer then reviews (Drydock) and promotes the staged versions with 2FA.
 
 # License
 [MIT & © Jared Wray](LICENSE)
