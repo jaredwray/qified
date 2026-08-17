@@ -1,5 +1,6 @@
 import { type Message, Qified } from "qified";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { Subscriber } from "zeromq";
 import {
 	createQified,
 	defaultZmqId,
@@ -116,6 +117,133 @@ describe("ZmqMessageProvider", () => {
 
 		await qified.unsubscribeMessage("test-topic", id);
 		await qified.disconnect();
+	});
+
+	test("should keep the topic until the last subscriber is gone", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5559" });
+		const topic = "test-topic";
+		const firstId = "first-handler";
+		const secondId = "second-handler";
+		const unsubscribeSpy = vi.spyOn(Subscriber.prototype, "unsubscribe");
+		const firstMessage: Omit<Message, "providerId"> = { id: "1", data: "one" };
+		const secondMessage: Omit<Message, "providerId"> = { id: "2", data: "two" };
+		let firstReceived: Message | undefined;
+		let secondReceived: Message | undefined;
+
+		try {
+			await provider.subscribe(topic, {
+				id: firstId,
+				async handler(message) {
+					firstReceived = message;
+				},
+			});
+			await provider.subscribe(topic, {
+				id: secondId,
+				async handler(message) {
+					secondReceived = message;
+				},
+			});
+
+			// Let the event loop iterate so message queue is read/written at next tick
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 100);
+			});
+
+			await provider.publish(topic, firstMessage);
+
+			// Let the event loop iterate so message queue is read/written at next tick
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 100);
+			});
+
+			expect(firstReceived).toEqual({
+				...firstMessage,
+				providerId: "@qified/zeromq",
+			});
+			expect(secondReceived).toEqual({
+				...firstMessage,
+				providerId: "@qified/zeromq",
+			});
+			expect(provider.subscriptions.get(topic)?.length).toBe(2);
+
+			await provider.unsubscribe(topic, firstId);
+
+			expect(provider.subscriptions.get(topic)?.length).toBe(1);
+			expect(unsubscribeSpy).not.toHaveBeenCalled();
+
+			firstReceived = undefined;
+			secondReceived = undefined;
+			await provider.publish(topic, secondMessage);
+
+			// Let the event loop iterate so message queue is read/written at next tick
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 100);
+			});
+
+			expect(firstReceived).toBeUndefined();
+			expect(secondReceived).toEqual({
+				...secondMessage,
+				providerId: "@qified/zeromq",
+			});
+
+			await provider.unsubscribe(topic, secondId);
+
+			expect(provider.subscriptions.get(topic)).toBeUndefined();
+			expect(unsubscribeSpy).toHaveBeenCalledWith(topic);
+		} finally {
+			unsubscribeSpy.mockRestore();
+			await provider.disconnect();
+		}
+	});
+
+	test("should allow unsubscribe before any subscription", async () => {
+		const provider = new ZmqMessageProvider();
+		const unsubscribeSpy = vi.spyOn(Subscriber.prototype, "unsubscribe");
+
+		try {
+			await provider.unsubscribe("test-topic", "missing");
+			expect(provider.subscriptions.size).toBe(0);
+			expect(unsubscribeSpy).not.toHaveBeenCalled();
+		} finally {
+			unsubscribeSpy.mockRestore();
+			await provider.disconnect();
+		}
+	});
+
+	test("should not unsubscribe the socket for an unknown topic", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5561" });
+		const unsubscribeSpy = vi.spyOn(Subscriber.prototype, "unsubscribe");
+
+		try {
+			await provider.subscribe("test-topic", {
+				id: "handler",
+				async handler() {},
+			});
+			unsubscribeSpy.mockClear();
+
+			await provider.unsubscribe("unknown-topic", "handler");
+			await provider.unsubscribe("another-unknown");
+
+			expect(unsubscribeSpy).not.toHaveBeenCalled();
+			expect(provider.subscriptions.has("test-topic")).toBe(true);
+		} finally {
+			unsubscribeSpy.mockRestore();
+			await provider.disconnect();
+		}
+	});
+
+	test("should unsubscribe remaining topics on disconnect", async () => {
+		const provider = new ZmqMessageProvider({ uri: "tcp://localhost:5560" });
+		await provider.subscribe("test-topic", {
+			id: "handler",
+			async handler() {},
+		});
+
+		expect(provider.subscriptions.has("test-topic")).toBe(true);
+
+		await provider.disconnect();
+
+		expect(provider.subscriptions.size).toBe(0);
 	});
 
 	test("should create Qified instance with ZeroMQ provider", () => {

@@ -148,6 +148,8 @@ export class ZmqMessageProvider implements MessageProvider {
 	 * @returns {Promise<void>} A promise that resolves when the unsubscription is complete.
 	 */
 	public async unsubscribe(topic: string, id?: string): Promise<void> {
+		const hadTopic = this.subscriptions.has(topic);
+
 		if (id) {
 			const current = this.subscriptions.get(topic);
 			if (current) {
@@ -155,9 +157,17 @@ export class ZmqMessageProvider implements MessageProvider {
 					topic,
 					current.filter((sub) => sub.id !== id),
 				);
+
+				if (this.subscriptions.get(topic)?.length === 0) {
+					this.subscriptions.delete(topic);
+				}
 			}
 		} else {
 			this.subscriptions.delete(topic);
+		}
+
+		if (hadTopic && !this.subscriptions.has(topic)) {
+			this._subscriber?.unsubscribe(topic);
 		}
 	}
 
@@ -173,9 +183,8 @@ export class ZmqMessageProvider implements MessageProvider {
 
 		this.subscriptions.clear();
 
-		// Close sockets and wait for them to fully close to free the port
-		await this._subscriber?.close();
-		await this._publisher?.close();
+		this._subscriber?.close();
+		this._publisher?.close();
 
 		this._subscriber = undefined;
 		this._publisher = undefined;
