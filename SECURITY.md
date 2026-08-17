@@ -26,4 +26,4 @@ hardening checklist; progress is tracked in [DEFENSE_IN_DEPTH.md](./DEFENSE_IN_D
 - CI runs with least-privilege permissions; every action is pinned to a full commit SHA; Socket Firewall (`sfw`) wraps `pnpm install`; workflows are security-linted with zizmor on every PR.
 - Codespaces and Cursor Cloud Agents install through Aikido Safe Chain; package-manager shims must not be bypassed.
 - Dependencies install through pnpm with a 7-day cooldown on new versions, and lifecycle scripts are blocked by default. Socket reviews every dependency change; Aikido scans every build.
-- npm releases authenticate with OIDC trusted publishing and provenance. There are no npm tokens in Actions.
+- npm releases authenticate with OIDC trusted publishing and provenance. CI stages with `npm stage publish`; a maintainer promotes with 2FA. There are no npm tokens in Actions.
