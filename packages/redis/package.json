@@ -37,7 +37,7 @@
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
-    "hookified": "^3.0.2",
+    "hookified": "^3.0.3",
     "redis": "^6.2.0"
   },
   "peerDependencies": {
