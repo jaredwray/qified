@@ -44,7 +44,7 @@
   "dependencies": {
     "@nats-io/jetstream": "^3.4.0",
     "@nats-io/transport-node": "^3.4.0",
-    "hookified": "^3.0.2"
+    "hookified": "^3.0.3"
   },
   "peerDependencies": {
     "qified": "workspace:^"
