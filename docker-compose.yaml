@@ -16,7 +16,7 @@ services:
       - "6379:6379" # Redis port
 
   valkey:
-    image: valkey/valkey:9.1.1
+    image: valkey/valkey:9.1.2@sha256:c123e3715db63d06d4ad6964884037aa0d5d4d703939b9929954112889708e1d
     container_name: valkey
     ports:
       - "6380:6379" # Valkey port (host 6380; redis already uses 6379)
