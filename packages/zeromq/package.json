@@ -37,7 +37,7 @@
   "author": "Jared Wray <me@jaredwray.com>",
   "license": "MIT",
   "dependencies": {
-    "zeromq": "^6.5.0"
+    "zeromq": "^6.8.0"
   },
   "peerDependencies": {
     "qified": "workspace:^"

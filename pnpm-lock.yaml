@@ -99,8 +99,8 @@ importers:
         specifier: workspace:^
         version: link:../qified
       zeromq:
-        specifier: ^6.5.0
-        version: 6.5.0
+        specifier: ^6.8.0
+        version: 6.8.0
 
 packages:
 
@@ -2622,8 +2622,8 @@ packages:
   yuku-parser@0.9.5:
     resolution: {integrity: sha512-IBnAdNVMswWbJcM7woPluOudectJzFjJ1N8jVRxP9Uq4CIv5hZdBIcdmtRbFDYF/Ph2j2gVup4YJ4N9mh0jYFA==}
 
-  zeromq@6.5.0:
-    resolution: {integrity: sha512-vWOrt19lvcXTxu5tiHXfEGQuldSlU+qZn2TT+4EbRQzaciWGwNZ99QQTolQOmcwVgZLodv+1QfC6UZs2PX/6pQ==}
+  zeromq@6.8.0:
+    resolution: {integrity: sha512-0LBpwZKNn4e6YZRDuHVvzXsSHlCx6nTk2B0O9KWQ2vUe3lau7PYPcmnFpJfOwEUTNcKn39x4GgzVU+dQyIJnNg==}
     engines: {node: '>= 12'}
 
   zod@4.4.3:
@@ -5266,7 +5266,7 @@ snapshots:
       '@yuku-parser/binding-win32-arm64': 0.9.5
       '@yuku-parser/binding-win32-x64': 0.9.5
 
-  zeromq@6.5.0:
+  zeromq@6.8.0:
     dependencies:
       cmake-ts: 1.0.2
       node-addon-api: 8.8.0
