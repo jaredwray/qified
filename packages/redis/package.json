@@ -38,7 +38,7 @@
   "license": "MIT",
   "dependencies": {
     "hookified": "^3.0.3",
-    "redis": "^6.2.0"
+    "redis": "^6.2.1"
   },
   "peerDependencies": {
     "qified": "workspace:^"
