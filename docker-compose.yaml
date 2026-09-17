@@ -22,7 +22,7 @@ services:
       - "6380:6379" # Valkey port (host 6380; redis already uses 6379)
 
   nats:
-    image: nats:2.14.5
+    image: nats:2.14.6@sha256:c50b0a773c6c8d033cad54f7c53cb97fd6e09b3bfc1accda7cd4fa94e19e9ed9
     container_name: nats
     command: ["-js"]
     ports:
