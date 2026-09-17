@@ -46,7 +46,7 @@ jobs:
       uses: SocketDev/action@ba6de6cc0565af1f42295590380973573297e31f # v1.3.2
       with:
         mode: firewall-free
-        firewall-version: "1.15.0"
+        firewall-version: "1.15.2"
 
     - name: Enable corepack
       run: corepack enable
@@ -62,7 +62,7 @@ jobs:
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+      uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       with:
         languages: ${{ matrix.language }}
 
@@ -70,6 +70,6 @@ jobs:
       run: pnpm build
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+      uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
       with:
         category: "/language:${{matrix.language}}"
