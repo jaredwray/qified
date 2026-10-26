@@ -88,6 +88,19 @@ jobs:
       run: |
         pnpm pack:packages
         ls -la packed
+        shopt -s nullglob
+        tarballs=(./packed/*.tgz)
+        if [ ${#tarballs[@]} -eq 0 ]; then
+          echo "No tarballs in packed/" >&2
+          exit 1
+        fi
+        for tgz in "${tarballs[@]}"; do
+          if ! tar -tzf "$tgz" | grep -Eq '(^|/)LICENSE$'; then
+            echo "LICENSE missing from $tgz" >&2
+            tar -tzf "$tgz" >&2
+            exit 1
+          fi
+        done
 
     - name: Stage publish
       # Pack with pnpm first so workspace: ranges become real semver, then

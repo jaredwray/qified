@@ -42,12 +42,13 @@ To do a version bump and publish:
    - If you are adding new features, use the `minor` version bump. `0.X.0`
    - If you are making a bug fix, use the `patch` version bump. `0.0.X`
 3. Sync the version changes to all packages by running `pnpm version:sync`.
-4. Check the changes and commit them to the main branch.
-5. Do a release on GitHub. CI then:
+4. Copy the root `LICENSE` into every publishable package by running `pnpm license:sync`, and commit those files. `pnpm pack:packages` runs this sync before packing, and the release workflow rejects any tarball that does not contain `LICENSE`.
+5. Check the changes and commit them to the main branch.
+6. Do a release on GitHub. CI then:
    1. Builds and tests
    2. Packs each package (`pnpm pack:packages`) so `workspace:` ranges become real semver
    3. Stages the tarballs with `pnpm stage publish --access public --provenance` (OIDC; they do not go live)
-6. Review the staged artifacts in Drydock, then promote with 2FA.
+7. Review the staged artifacts in Drydock, then promote with 2FA.
 
 # License
 [MIT & © Jared Wray](LICENSE)
