@@ -5,6 +5,7 @@
 [![codecov](https://codecov.io/gh/jaredwray/qified/graph/badge.svg?token=jcRdy8SkOG)](https://codecov.io/gh/jaredwray/qified)
 [![npm](https://img.shields.io/npm/dm/qified)](https://npmjs.com/package/qified)
 [![npm](https://img.shields.io/npm/v/qified)](https://npmjs.com/package/qified)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2Fqified)](https://drydock.org/diff/qified)
 
 # qified
 Task and Message Queues with Multiple Providers
