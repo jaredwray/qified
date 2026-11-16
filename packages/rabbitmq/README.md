@@ -1,3 +1,5 @@
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Frabbitmq)](https://drydock.org/diff/@qified/rabbitmq)
+
 # @qified/rabbitmq
 
 RabbitMQ message and task provider for [Qified](https://github.com/jaredwray/qified).

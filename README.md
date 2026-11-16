@@ -6,6 +6,11 @@
 [![npm](https://img.shields.io/npm/dm/qified)](https://npmjs.com/package/qified)
 [![npm](https://img.shields.io/npm/v/qified)](https://npmjs.com/package/qified)
 [![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2Fqified)](https://drydock.org/diff/qified)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Fredis&label=%40qified%2Fredis)](https://drydock.org/diff/@qified/redis)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Fvalkey&label=%40qified%2Fvalkey)](https://drydock.org/diff/@qified/valkey)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Frabbitmq&label=%40qified%2Frabbitmq)](https://drydock.org/diff/@qified/rabbitmq)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Fnats&label=%40qified%2Fnats)](https://drydock.org/diff/@qified/nats)
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Fzeromq&label=%40qified%2Fzeromq)](https://drydock.org/diff/@qified/zeromq)
 
 # qified
 Task and Message Queues with Multiple Providers
