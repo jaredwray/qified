@@ -1918,6 +1918,62 @@ describe("ValkeyTaskProvider", () => {
 			}
 		});
 
+		test("should not report an invalid task that the timeout scan did not recover", async () => {
+			const customProvider = new ValkeyTaskProvider({ pollInterval: 30 });
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+			const client = (customProvider as any)._client;
+			const errors: Error[] = [];
+			customProvider.on("error", (error: Error) => {
+				errors.push(error);
+			});
+
+			// A fast local clock makes the scan read a delivery that the server
+			// clock does not show as expired. RECOVER then returns 0, as it does
+			// when a different provider recovers the task first.
+			const realNow = Date.now.bind(Date);
+			const liveDeadline = realNow() + 60_000;
+			const clock = vi
+				.spyOn(Date, "now")
+				.mockImplementation(() => realNow() + 3_600_000);
+
+			try {
+				// The scan reads the expired valid task first, then the invalid task.
+				const expiredId = "expired-task-id";
+				await client.set(
+					`${testQueue}:task:${expiredId}`,
+					JSON.stringify({ id: expiredId, data: {} }),
+				);
+				await client.set(`${testQueue}:task:${expiredId}:attempt`, "1");
+				await client.zadd(`${testQueue}:processing`, 1, expiredId);
+				await client.set(`${testQueue}:task:${poisonId}`, "not json");
+				await client.zadd(`${testQueue}:processing`, liveDeadline, poisonId);
+
+				// The provider delivers the valid task after the scan is complete.
+				const delivered = await new Promise<string>((resolve) => {
+					void customProvider.dequeue(testQueue, {
+						id: "test-handler",
+						handler: async (task: Task) => {
+							resolve(task.id);
+						},
+					});
+				});
+
+				expect(delivered).toBe(expiredId);
+				expect(errors).toEqual([]);
+				expect(await client.zrange(`${testQueue}:processing`, 0, -1)).toContain(
+					poisonId,
+				);
+				expect(await client.lrange(`${testQueue}:dead-letter`, 0, -1)).toEqual(
+					[],
+				);
+			} finally {
+				clock.mockRestore();
+				await customProvider.clearQueue(testQueue);
+				await customProvider.disconnect();
+			}
+		});
+
 		test("should omit dead-letter entries that have no valid body", async () => {
 			const client = (provider as any)._client;
 			const validTask = { id: "valid-task-id", data: { message: "kept" } };

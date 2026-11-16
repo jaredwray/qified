@@ -489,7 +489,7 @@ export class ValkeyTaskProvider extends Hookified implements TaskProvider {
 
 			// Atomically recover the task: re-verify expiry, invalidate the stale
 			// owner's fence token, and requeue or dead-letter it.
-			await client.eval(
+			const recovered = await client.eval(
 				RECOVER_SCRIPT,
 				5,
 				this.getProcessingKey(queue),
@@ -501,7 +501,9 @@ export class ValkeyTaskProvider extends Hookified implements TaskProvider {
 				String(maxRetries),
 			);
 
-			if (!task) {
+			// RECOVER returns 0 if a different provider recovered the task, or if
+			// the server clock shows that the deadline did not pass.
+			if (!task && recovered === 1) {
 				this.reportInvalidTask(queue, taskId);
 			}
 		}
