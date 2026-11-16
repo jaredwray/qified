@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: This is a test file and explicit any is acceptable here.
 
 import type { Task, TaskContext, TaskHandler } from "qified";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	defaultRedisTaskId,
 	defaultTaskRetries,
@@ -1761,6 +1761,195 @@ describe("RedisTaskProvider", () => {
 			expect(await client.exists(`${testQueue}:task:${taskId}:fence`)).toBe(0);
 
 			await customProvider.disconnect();
+		});
+	});
+
+	describe("invalid task bodies", () => {
+		const poisonId = "poison-task-id";
+
+		test.each([
+			"not json",
+			"null",
+			"42",
+			"[]",
+			'{"data":{}}',
+			'{"id":7,"data":{}}',
+		])(
+			"should dead-letter a claimed task with body %s and deliver the next task",
+			async (body) => {
+				const client = (provider as any)._client;
+				const errors: Error[] = [];
+				provider.on("error", (error: Error) => {
+					errors.push(error);
+				});
+
+				// The ready list is FIFO, so the provider claims the invalid task first.
+				await client.set(`${testQueue}:task:${poisonId}`, body);
+				await client.lPush(`${testQueue}:tasks`, poisonId);
+				const goodId = await provider.enqueue(testQueue, { data: {} });
+
+				const received: unknown[] = [];
+				await provider.dequeue(testQueue, {
+					id: "test-handler",
+					handler: async (task: Task) => {
+						received.push(task);
+					},
+				});
+
+				await vi.waitFor(async () => {
+					expect(await provider.getQueueStats(testQueue)).toEqual({
+						waiting: 0,
+						processing: 0,
+						deadLetter: 1,
+					});
+				});
+				expect(received).toEqual([expect.objectContaining({ id: goodId })]);
+				expect(await client.lRange(`${testQueue}:dead-letter`, 0, -1)).toEqual([
+					poisonId,
+				]);
+				expect(errors).toHaveLength(1);
+				expect(errors[0].message).toContain(poisonId);
+			},
+		);
+
+		test("should keep the queue active when no error listener exists", async () => {
+			// This provider keeps the Hookified default, which throws on an
+			// "error" event that has no listener.
+			const customProvider = new RedisTaskProvider({ pollInterval: 60000 });
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+			const client = (customProvider as any)._client;
+
+			try {
+				const received: string[] = [];
+				await customProvider.dequeue(testQueue, {
+					id: "test-handler",
+					handler: async (task: Task) => {
+						received.push(task.id);
+					},
+				});
+
+				// The poll timer is idle, so only the drain that enqueue() starts
+				// can claim these two tasks.
+				await client.set(`${testQueue}:task:${poisonId}`, "not json");
+				await client.lPush(`${testQueue}:tasks`, poisonId);
+				const goodId = await customProvider.enqueue(testQueue, { data: {} });
+
+				await vi.waitFor(() => {
+					expect(received).toEqual([goodId]);
+				});
+				expect(await client.lRange(`${testQueue}:dead-letter`, 0, -1)).toEqual([
+					poisonId,
+				]);
+			} finally {
+				await customProvider.clearQueue(testQueue);
+				await customProvider.disconnect();
+			}
+		});
+
+		test("should report the cause and continue when the dead-letter move fails", async () => {
+			const client = (provider as any)._client;
+			const errors: Error[] = [];
+			provider.on("error", (error: Error) => {
+				errors.push(error);
+			});
+
+			// A string at the dead-letter key makes LPUSH fail in the script.
+			await client.set(`${testQueue}:dead-letter`, "wrong type");
+
+			try {
+				await client.set(`${testQueue}:task:${poisonId}`, "not json");
+				await client.lPush(`${testQueue}:tasks`, poisonId);
+				const goodId = await provider.enqueue(testQueue, { data: {} });
+
+				const received: string[] = [];
+				await provider.dequeue(testQueue, {
+					id: "test-handler",
+					handler: async (task: Task) => {
+						received.push(task.id);
+					},
+				});
+
+				await vi.waitFor(() => {
+					expect(received).toEqual([goodId]);
+				});
+				expect(errors).toHaveLength(1);
+				expect(errors[0].message).toContain(poisonId);
+				expect(String(errors[0].cause)).toContain("WRONGTYPE");
+			} finally {
+				// The script removed the task from the processing set before LPUSH
+				// failed, so clearQueue() cannot find these keys.
+				await client.del(`${testQueue}:dead-letter`);
+				await client.del(`${testQueue}:task:${poisonId}`);
+				await client.del(`${testQueue}:task:${poisonId}:attempt`);
+			}
+		});
+
+		test("should dead-letter an expired invalid task and recover the tasks after it", async () => {
+			const customProvider = new RedisTaskProvider({ pollInterval: 30 });
+			await customProvider.connect();
+			await customProvider.clearQueue(testQueue);
+			const client = (customProvider as any)._client;
+			const errors: Error[] = [];
+			customProvider.on("error", (error: Error) => {
+				errors.push(error);
+			});
+
+			try {
+				// Two expired deliveries. The timeout scan reads the invalid one first.
+				const expiredId = "expired-task-id";
+				await client.set(`${testQueue}:task:${poisonId}`, "not json");
+				await client.zAdd(`${testQueue}:processing`, {
+					score: 1,
+					value: poisonId,
+				});
+				await client.set(
+					`${testQueue}:task:${expiredId}`,
+					JSON.stringify({ id: expiredId, data: {} }),
+				);
+				await client.set(`${testQueue}:task:${expiredId}:attempt`, "1");
+				await client.zAdd(`${testQueue}:processing`, {
+					score: 2,
+					value: expiredId,
+				});
+
+				const received: string[] = [];
+				await customProvider.dequeue(testQueue, {
+					id: "test-handler",
+					handler: async (task: Task) => {
+						received.push(task.id);
+					},
+				});
+
+				await vi.waitFor(() => {
+					expect(received).toEqual([expiredId]);
+				});
+				expect(await client.lRange(`${testQueue}:dead-letter`, 0, -1)).toEqual([
+					poisonId,
+				]);
+				expect(errors).toHaveLength(1);
+				expect(errors[0].message).toContain(poisonId);
+			} finally {
+				await customProvider.clearQueue(testQueue);
+				await customProvider.disconnect();
+			}
+		});
+
+		test("should omit dead-letter entries that have no valid body", async () => {
+			const client = (provider as any)._client;
+			const validTask = { id: "valid-task-id", data: { message: "kept" } };
+			await client.set(
+				`${testQueue}:task:${validTask.id}`,
+				JSON.stringify(validTask),
+			);
+			await client.set(`${testQueue}:task:${poisonId}`, "not json");
+			await client.lPush(`${testQueue}:dead-letter`, [
+				validTask.id,
+				poisonId,
+				"missing-body-task-id",
+			]);
+
+			expect(await provider.getDeadLetterTasks(testQueue)).toEqual([validTask]);
 		});
 	});
 });

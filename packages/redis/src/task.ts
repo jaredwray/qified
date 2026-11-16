@@ -472,8 +472,10 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				continue;
 			}
 
-			const task = JSON.parse(taskDataStr) as Task;
-			const maxRetries = task.maxRetries ?? this._retries;
+			// A task with an invalid body gets no retry, so RECOVER moves it to
+			// the dead-letter queue.
+			const task = this.parseTask(taskDataStr);
+			const maxRetries = task ? (task.maxRetries ?? this._retries) : 0;
 
 			// Atomically recover the task: re-verify expiry, invalidate the stale
 			// owner's fence token, and requeue or dead-letter it.
@@ -487,7 +489,89 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 				],
 				arguments: [taskId, String(maxRetries)],
 			});
+
+			if (!task) {
+				this.reportInvalidTask(queue, taskId);
+			}
 		}
+	}
+
+	/**
+	 * Decodes a stored task body. Any client with write access to the keyspace
+	 * can store a body, so the provider does not trust it.
+	 * @returns The task, or undefined if the body is not a JSON object with a string id
+	 */
+	private parseTask(taskDataStr: string): Task | undefined {
+		let value: unknown;
+		try {
+			value = JSON.parse(taskDataStr);
+		} catch {
+			return undefined;
+		}
+
+		if (
+			typeof value !== "object" ||
+			value === null ||
+			typeof (value as Task).id !== "string"
+		) {
+			return undefined;
+		}
+
+		return value as Task;
+	}
+
+	/**
+	 * Emits an "error" event for a task with an invalid body. Hookified throws
+	 * if an "error" event has no listener. This method catches that error,
+	 * because an invalid body must not stop the queue.
+	 * @param cause The error that prevented the move to the dead-letter queue, if any
+	 */
+	private reportInvalidTask(
+		queue: string,
+		taskId: string,
+		cause?: unknown,
+	): void {
+		try {
+			this.emit(
+				"error",
+				new Error(
+					`Task ${JSON.stringify(taskId)} in queue ${JSON.stringify(queue)} has an invalid body`,
+					{ cause },
+				),
+			);
+		} catch {
+			// The event has no listener, or a listener threw an error.
+		}
+	}
+
+	/**
+	 * Moves a claimed task with an invalid body to the dead-letter queue. The
+	 * claim reply supplies the task id, because the body cannot supply it.
+	 */
+	private async deadLetterInvalidTask(
+		queue: string,
+		taskId: string,
+		token: string,
+	): Promise<void> {
+		const client = await this.getClient();
+		let cause: unknown;
+
+		try {
+			await client.eval(REJECT_SCRIPT, {
+				keys: [
+					this.getProcessingKey(queue),
+					this.getQueueKey(queue),
+					this.getDeadLetterKey(queue),
+					this.getTaskAttemptKey(queue, taskId),
+					this.getTaskFenceKey(queue, taskId),
+				],
+				arguments: [token, taskId, "0", "0"],
+			});
+		} catch (error) {
+			cause = error;
+		}
+
+		this.reportInvalidTask(queue, taskId, cause);
 	}
 
 	/**
@@ -530,13 +614,17 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 			return;
 		}
 
-		const [, taskDataStr, attempt, token] = reply;
-		const task = JSON.parse(taskDataStr) as Task;
+		const [taskId, taskDataStr, attempt, token] = reply;
+		const task = this.parseTask(taskDataStr);
 
-		// Process with each handler. They share one delivery and fence token;
-		// the first ack/reject wins.
-		for (const handler of handlers) {
-			void this.processTask(queue, task, handler, attempt, token);
+		if (task) {
+			// Process with each handler. They share one delivery and fence token;
+			// the first ack/reject wins.
+			for (const handler of handlers) {
+				void this.processTask(queue, task, handler, attempt, token);
+			}
+		} else {
+			await this.deadLetterInvalidTask(queue, taskId, token);
 		}
 
 		// Continue processing more tasks
@@ -778,9 +866,9 @@ export class RedisTaskProvider extends Hookified implements TaskProvider {
 		const tasks: Task[] = [];
 		for (const taskId of taskIds) {
 			const taskDataStr = await client.get(this.getTaskDataKey(queue, taskId));
-			/* v8 ignore next -- @preserve */
-			if (taskDataStr) {
-				tasks.push(JSON.parse(taskDataStr) as Task);
+			const task = taskDataStr ? this.parseTask(taskDataStr) : undefined;
+			if (task) {
+				tasks.push(task);
 			}
 		}
 
