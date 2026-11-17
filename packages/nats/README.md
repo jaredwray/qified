@@ -1,3 +1,5 @@
+[![Drydock review](https://img.shields.io/endpoint?url=https%3A%2F%2Fdrydock.org%2Fpublic%2Fbadge%2Fnpm%2F%40qified%2Fnats)](https://drydock.org/diff/@qified/nats)
+
 # @qified/nats
 
 NATS message provider for [Qified](https://github.com/jaredwray/qified).
